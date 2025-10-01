@@ -15,6 +15,8 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({
     origin: [
         'https://punto-de-venta-web-f47e8.web.app',
+        'https://punto-de-venta-web.web.app',
+        'https://sistema-pos-web.web.app',
         'http://localhost:3000',
         'http://127.0.0.1:3000'
     ],
