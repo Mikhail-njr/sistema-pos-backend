@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const initSqlJs = require('sql.js');
+const Database = require('better-sqlite3');
 const basicAuth = require('express-basic-auth');
 const session = require('express-session');
 const { exec } = require('child_process');
@@ -95,19 +95,22 @@ app.use('/api/categories', protectWriteOperations);
 // Servir archivos frontend desde carpeta ../Frontend (AGREGADO)
 app.use(express.static(path.join(__dirname, '../Frontend'), { maxAge: 0 }));
 
-// Configuración de SQLite con sql.js
+// Configuración de SQLite con better-sqlite3
 const dbPath = path.join(__dirname, 'pos_database.sqlite');
 let db;
 
-async function initDatabaseConnection() {
+function initDatabaseConnection() {
     try {
         console.log('🔄 Inicializando base de datos...');
 
-        // Para Railway, usar base de datos en memoria por simplicidad
-        const SQL = await initSqlJs();
-        db = new SQL.Database();
+        // Crear/conectar a base de datos SQLite
+        db = new Database(dbPath);
 
-        console.log('✅ Base de datos SQLite inicializada (en memoria)');
+        // Configurar para mejor rendimiento
+        db.pragma('journal_mode = WAL');
+        db.pragma('synchronous = NORMAL');
+
+        console.log('✅ Conectado a base de datos SQLite');
         initDatabase();
     } catch (error) {
         console.error('❌ Error inicializando base de datos:', error);
@@ -116,8 +119,8 @@ async function initDatabaseConnection() {
     }
 }
 
-async function startServer() {
-    await initDatabaseConnection();
+function startServer() {
+    initDatabaseConnection();
 
     // Iniciar servidor
     app.listen(PORT, () => {
@@ -176,24 +179,6 @@ function initDatabase() {
             FOREIGN KEY (producto_id) REFERENCES productos(id)
         )`);
 
-        // Agregar columnas de descuento si no existen (para compatibilidad con bases de datos existentes)
-        try {
-            db.exec(`ALTER TABLE venta_items ADD COLUMN descuento_porcentaje REAL DEFAULT 0`);
-            console.log('✅ Columna descuento_porcentaje agregada');
-        } catch (err) {
-            if (!err.message.includes('duplicate column name')) {
-                console.log('⚠️  Columna descuento_porcentaje ya existe o error:', err.message);
-            }
-        }
-        try {
-            db.exec(`ALTER TABLE venta_items ADD COLUMN descuento_aplicado REAL DEFAULT 0`);
-            console.log('✅ Columna descuento_aplicado agregada');
-        } catch (err) {
-            if (!err.message.includes('duplicate column name')) {
-                console.log('⚠️  Columna descuento_aplicado ya existe o error:', err.message);
-            }
-        }
-
         // Tabla cierres_caja
         db.exec(`CREATE TABLE IF NOT EXISTS cierres_caja (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -238,12 +223,12 @@ function initDatabase() {
         )`);
 
         // Verificar si hay datos
-        const stmt = db.prepare("SELECT COUNT(*) as count FROM productos");
-        const result = stmt.getAsObject();
-        stmt.free();
+        const result = db.prepare("SELECT COUNT(*) as count FROM productos").get();
         if (result.count === 0) {
             insertSampleData();
         }
+
+        console.log('✅ Base de datos inicializada correctamente');
     } catch (error) {
         console.error('❌ Error inicializando base de datos:', error);
     }
@@ -262,14 +247,14 @@ function insertSampleData() {
         ['MEM-001', 'Memoria RAM 8GB', 'Memoria RAM DDR4 8GB 2666MHz', 49.99, 8, 'Componentes']
     ];
 
+    const insert = db.prepare(`
+        INSERT OR IGNORE INTO productos (codigo, nombre, descripcion, precio, stock, categoria)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
     productos.forEach(producto => {
         try {
-            const stmt = db.prepare(`
-                INSERT OR IGNORE INTO productos (codigo, nombre, descripcion, precio, stock, categoria)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `);
-            stmt.run(producto);
-            stmt.free();
+            insert.run(producto);
         } catch (error) {
             console.log('⚠️  Error insertando producto:', producto[0], error.message);
         }
@@ -278,16 +263,11 @@ function insertSampleData() {
     console.log('✅ Datos de ejemplo insertados en SQLite');
 }
 
-// Función para hacer queries más fácil
+// Función para hacer queries más fácil (better-sqlite3)
 function dbAll(query, params = []) {
     try {
         const stmt = db.prepare(query);
-        const results = [];
-        while (stmt.step()) {
-            results.push(stmt.getAsObject());
-        }
-        stmt.free();
-        return results;
+        return stmt.all(params);
     } catch (error) {
         throw error;
     }
@@ -552,16 +532,9 @@ app.post('/api/generate-pdf-report', authMiddleware, async (req, res) => {
 
 function dbRun(query, params = []) {
     try {
-        // Para INSERT, necesitamos manejar los parámetros de manera diferente
-        if (params.length > 0) {
-            const stmt = db.prepare(query);
-            const result = stmt.run(params);
-            stmt.free();
-            return { id: result.insertId, changes: 1 };
-        } else {
-            db.run(query);
-            return { id: undefined, changes: 1 };
-        }
+        const stmt = db.prepare(query);
+        const result = stmt.run(params);
+        return { id: result.lastInsertRowid, changes: result.changes };
     } catch (error) {
         throw error;
     }
@@ -895,10 +868,9 @@ app.post('/api/sales', async (req, res) => {
         console.log('🕒 Timestamp para factura:', Date.now());
 
         // Iniciar transacción
-        db.exec("BEGIN TRANSACTION");
-        console.log('🧾 Datos recibidos en /api/sales:', req.body);
+        const transaction = db.transaction(() => {
+            console.log('🧾 Datos recibidos en /api/sales:', req.body);
 
-        try {
             // Insertar venta
             const saleResult = dbRun(
                 "INSERT INTO ventas (numero_factura, total, metodo_pago, vuelto) VALUES (?, ?, ?, ?)",
@@ -918,23 +890,22 @@ app.post('/api/sales', async (req, res) => {
                 );
             }
 
-            db.exec("COMMIT");
+            return saleResult;
+        });
 
-            res.json({
-                success: true,
-                factura: facturaNumber,
-                total: total,
-                saleId: saleResult.id,
-                itemsWithDiscounts: itemsWithDiscounts,
-                message: 'Venta registrada exitosamente en SQLite'
-            });
+        const saleResult = transaction();
 
-        } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-        }
+        res.json({
+            success: true,
+            factura: facturaNumber,
+            total: total,
+            saleId: saleResult.id,
+            itemsWithDiscounts: itemsWithDiscounts,
+            message: 'Venta registrada exitosamente en SQLite'
+        });
 
     } catch (error) {
+        console.error('Error procesando la venta:', error);
         res.status(500).json({
             error: 'Error procesando la venta: ' + error.message
         });
@@ -1276,9 +1247,7 @@ app.get('/api/cierres', async (req, res) => {
 app.post('/api/reset-data', authMiddleware, async (req, res) => {
     try {
         // Iniciar transacción
-        db.exec("BEGIN TRANSACTION");
-
-        try {
+        const transaction = db.transaction(() => {
             // Eliminar todos los items de venta
             dbRun("DELETE FROM venta_items");
 
@@ -1290,18 +1259,14 @@ app.post('/api/reset-data', authMiddleware, async (req, res) => {
 
             // Resetear stock de productos (opcional, comentado)
             // dbRun("UPDATE productos SET stock = 0");
+        });
 
-            db.exec("COMMIT");
+        transaction();
 
-            res.json({
-                success: true,
-                message: 'Datos de ventas y cierres reseteados exitosamente. Los productos permanecen intactos.'
-            });
-
-        } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-        }
+        res.json({
+            success: true,
+            message: 'Datos de ventas y cierres reseteados exitosamente. Los productos permanecen intactos.'
+        });
 
     } catch (error) {
         console.error('Error reseteando datos:', error);
@@ -1523,9 +1488,7 @@ app.post('/api/promotions', async (req, res) => {
 
     try {
         // Iniciar transacción
-        db.exec("BEGIN TRANSACTION");
-
-        try {
+        const transaction = db.transaction(() => {
             // Crear promoción
             const promoResult = dbRun(
                 "INSERT INTO promociones (nombre) VALUES (?)",
@@ -1547,18 +1510,16 @@ app.post('/api/promotions', async (req, res) => {
                 );
             }
 
-            db.exec("COMMIT");
+            return promoResult;
+        });
 
-            res.status(201).json({
-                success: true,
-                message: 'Promoción creada exitosamente',
-                promotion: { id: promoResult.id, nombre, productos }
-            });
+        const promoResult = transaction();
 
-        } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-        }
+        res.status(201).json({
+            success: true,
+            message: 'Promoción creada exitosamente',
+            promotion: { id: promoResult.id, nombre, productos }
+        });
 
     } catch (error) {
         console.error('Error creando promoción:', error);
