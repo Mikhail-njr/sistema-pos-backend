@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
 const basicAuth = require('express-basic-auth');
 const session = require('express-session');
 const { exec } = require('child_process');
@@ -95,115 +95,158 @@ app.use('/api/categories', protectWriteOperations);
 // Servir archivos frontend desde carpeta ../Frontend (AGREGADO)
 app.use(express.static(path.join(__dirname, '../Frontend'), { maxAge: 0 }));
 
-// Configuración de SQLite
+// Configuración de SQLite con sql.js
 const dbPath = path.join(__dirname, 'pos_database.sqlite');
-const db = new Database(dbPath);
-console.log('✅ Conectado a la base de datos SQLite');
-initDatabase();
+let db;
+
+async function initDatabaseConnection() {
+    try {
+        const SQL = await initSqlJs();
+        let filebuffer = null;
+
+        // Intentar cargar base de datos existente
+        if (fs.existsSync(dbPath)) {
+            filebuffer = fs.readFileSync(dbPath);
+        }
+
+        db = new SQL.Database(filebuffer);
+
+        // Función para guardar la base de datos
+        const saveDatabase = () => {
+            const data = db.export();
+            const buffer = Buffer.from(data);
+            fs.writeFileSync(dbPath, buffer);
+        };
+
+        // Guardar cada 30 segundos
+        setInterval(saveDatabase, 30000);
+
+        // Guardar al cerrar
+        process.on('SIGINT', () => {
+            saveDatabase();
+            console.log('✅ Conexión a la base de datos cerrada');
+            process.exit(0);
+        });
+
+        console.log('✅ Conectado a la base de datos SQLite (sql.js)');
+        initDatabase();
+    } catch (error) {
+        console.error('❌ Error inicializando base de datos:', error);
+        process.exit(1);
+    }
+}
+
+initDatabaseConnection();
 
 // Inicializar la base de datos
 function initDatabase() {
-    // Tabla productos
-    db.exec(`CREATE TABLE IF NOT EXISTS productos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        codigo TEXT UNIQUE NOT NULL,
-        nombre TEXT NOT NULL,
-        descripcion TEXT,
-        precio REAL NOT NULL,
-        stock INTEGER DEFAULT 0,
-        categoria TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    // Tabla ventas
-    db.exec(`CREATE TABLE IF NOT EXISTS ventas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        numero_factura TEXT UNIQUE NOT NULL,
-        total REAL NOT NULL,
-        metodo_pago TEXT NOT NULL,
-        vuelto REAL DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    // Tabla items_venta
-    db.exec(`CREATE TABLE IF NOT EXISTS venta_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        venta_id INTEGER NOT NULL,
-        producto_id INTEGER NOT NULL,
-        cantidad INTEGER NOT NULL,
-        precio_unitario REAL NOT NULL,
-        descuento_porcentaje REAL DEFAULT 0,
-        descuento_aplicado REAL DEFAULT 0,
-        subtotal REAL NOT NULL,
-        FOREIGN KEY (venta_id) REFERENCES ventas(id),
-        FOREIGN KEY (producto_id) REFERENCES productos(id)
-    )`);
-
-    // Agregar columnas de descuento si no existen (para compatibilidad con bases de datos existentes)
     try {
-        db.exec(`ALTER TABLE venta_items ADD COLUMN descuento_porcentaje REAL DEFAULT 0`);
-        console.log('✅ Columna descuento_porcentaje agregada');
-    } catch (err) {
-        if (!err.message.includes('duplicate column name')) {
-            console.log('⚠️  Columna descuento_porcentaje ya existe o error:', err.message);
+        // Tabla productos
+        db.exec(`CREATE TABLE IF NOT EXISTS productos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT UNIQUE NOT NULL,
+            nombre TEXT NOT NULL,
+            descripcion TEXT,
+            precio REAL NOT NULL,
+            stock INTEGER DEFAULT 0,
+            categoria TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // Tabla ventas
+        db.exec(`CREATE TABLE IF NOT EXISTS ventas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            numero_factura TEXT UNIQUE NOT NULL,
+            total REAL NOT NULL,
+            metodo_pago TEXT NOT NULL,
+            vuelto REAL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // Tabla items_venta
+        db.exec(`CREATE TABLE IF NOT EXISTS venta_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            venta_id INTEGER NOT NULL,
+            producto_id INTEGER NOT NULL,
+            cantidad INTEGER NOT NULL,
+            precio_unitario REAL NOT NULL,
+            descuento_porcentaje REAL DEFAULT 0,
+            descuento_aplicado REAL DEFAULT 0,
+            subtotal REAL NOT NULL,
+            FOREIGN KEY (venta_id) REFERENCES ventas(id),
+            FOREIGN KEY (producto_id) REFERENCES productos(id)
+        )`);
+
+        // Agregar columnas de descuento si no existen (para compatibilidad con bases de datos existentes)
+        try {
+            db.exec(`ALTER TABLE venta_items ADD COLUMN descuento_porcentaje REAL DEFAULT 0`);
+            console.log('✅ Columna descuento_porcentaje agregada');
+        } catch (err) {
+            if (!err.message.includes('duplicate column name')) {
+                console.log('⚠️  Columna descuento_porcentaje ya existe o error:', err.message);
+            }
         }
-    }
-    try {
-        db.exec(`ALTER TABLE venta_items ADD COLUMN descuento_aplicado REAL DEFAULT 0`);
-        console.log('✅ Columna descuento_aplicado agregada');
-    } catch (err) {
-        if (!err.message.includes('duplicate column name')) {
-            console.log('⚠️  Columna descuento_aplicado ya existe o error:', err.message);
+        try {
+            db.exec(`ALTER TABLE venta_items ADD COLUMN descuento_aplicado REAL DEFAULT 0`);
+            console.log('✅ Columna descuento_aplicado agregada');
+        } catch (err) {
+            if (!err.message.includes('duplicate column name')) {
+                console.log('⚠️  Columna descuento_aplicado ya existe o error:', err.message);
+            }
         }
-    }
 
-    // Tabla cierres_caja
-    db.exec(`CREATE TABLE IF NOT EXISTS cierres_caja (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
-        dinero_inicial REAL NOT NULL,
-        total_ventas REAL NOT NULL,
-        total_esperado REAL NOT NULL,
-        diferencia REAL NOT NULL,
-        cantidad_ventas INTEGER NOT NULL
-    )`);
+        // Tabla cierres_caja
+        db.exec(`CREATE TABLE IF NOT EXISTS cierres_caja (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+            dinero_inicial REAL NOT NULL,
+            total_ventas REAL NOT NULL,
+            total_esperado REAL NOT NULL,
+            diferencia REAL NOT NULL,
+            cantidad_ventas INTEGER NOT NULL
+        )`);
 
-    // Tabla proveedores (suppliers)
-    db.exec(`CREATE TABLE IF NOT EXISTS proveedores (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre_proveedor TEXT NOT NULL,
-        nombre_contacto TEXT,
-        telefono TEXT,
-        email TEXT,
-        productos_servicios TEXT,
-        condiciones_pago TEXT,
-        estatus TEXT DEFAULT 'Activo',
-        notas TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+        // Tabla proveedores (suppliers)
+        db.exec(`CREATE TABLE IF NOT EXISTS proveedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre_proveedor TEXT NOT NULL,
+            nombre_contacto TEXT,
+            telefono TEXT,
+            email TEXT,
+            productos_servicios TEXT,
+            condiciones_pago TEXT,
+            estatus TEXT DEFAULT 'Activo',
+            notas TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
 
-    // Tabla promociones
-    db.exec(`CREATE TABLE IF NOT EXISTS promociones (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+        // Tabla promociones
+        db.exec(`CREATE TABLE IF NOT EXISTS promociones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
 
-    // Tabla productos en promocion
-    db.exec(`CREATE TABLE IF NOT EXISTS promocion_productos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        promocion_id INTEGER NOT NULL,
-        producto_id INTEGER NOT NULL,
-        descuento_porcentaje REAL NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (promocion_id) REFERENCES promociones(id) ON DELETE CASCADE,
-        FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
-    )`);
+        // Tabla productos en promocion
+        db.exec(`CREATE TABLE IF NOT EXISTS promocion_productos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            promocion_id INTEGER NOT NULL,
+            producto_id INTEGER NOT NULL,
+            descuento_porcentaje REAL NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (promocion_id) REFERENCES promociones(id) ON DELETE CASCADE,
+            FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+        )`);
 
-    // Verificar si hay datos
-    const row = db.prepare("SELECT COUNT(*) as count FROM productos").get();
-    if (row.count === 0) {
-        insertSampleData();
+        // Verificar si hay datos
+        const stmt = db.prepare("SELECT COUNT(*) as count FROM productos");
+        const result = stmt.getAsObject();
+        stmt.free();
+        if (result.count === 0) {
+            insertSampleData();
+        }
+    } catch (error) {
+        console.error('❌ Error inicializando base de datos:', error);
     }
 }
 
@@ -220,13 +263,17 @@ function insertSampleData() {
         ['MEM-001', 'Memoria RAM 8GB', 'Memoria RAM DDR4 8GB 2666MHz', 49.99, 8, 'Componentes']
     ];
 
-    const stmt = db.prepare(`
-        INSERT OR IGNORE INTO productos (codigo, nombre, descripcion, precio, stock, categoria)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
     productos.forEach(producto => {
-        stmt.run(producto);
+        try {
+            const stmt = db.prepare(`
+                INSERT OR IGNORE INTO productos (codigo, nombre, descripcion, precio, stock, categoria)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `);
+            stmt.run(producto);
+            stmt.free();
+        } catch (error) {
+            console.log('⚠️  Error insertando producto:', producto[0], error.message);
+        }
     });
 
     console.log('✅ Datos de ejemplo insertados en SQLite');
@@ -236,7 +283,12 @@ function insertSampleData() {
 function dbAll(query, params = []) {
     try {
         const stmt = db.prepare(query);
-        return stmt.all(params);
+        const results = [];
+        while (stmt.step()) {
+            results.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return results;
     } catch (error) {
         throw error;
     }
@@ -501,9 +553,16 @@ app.post('/api/generate-pdf-report', authMiddleware, async (req, res) => {
 
 function dbRun(query, params = []) {
     try {
-        const stmt = db.prepare(query);
-        const result = stmt.run(params);
-        return { id: result.lastInsertRowid, changes: result.changes };
+        // Para INSERT, necesitamos manejar los parámetros de manera diferente
+        if (params.length > 0) {
+            const stmt = db.prepare(query);
+            const result = stmt.run(params);
+            stmt.free();
+            return { id: result.insertId, changes: 1 };
+        } else {
+            db.run(query);
+            return { id: undefined, changes: 1 };
+        }
     } catch (error) {
         throw error;
     }
@@ -837,7 +896,7 @@ app.post('/api/sales', async (req, res) => {
         console.log('🕒 Timestamp para factura:', Date.now());
 
         // Iniciar transacción
-        db.exec("BEGIN");
+        db.exec("BEGIN TRANSACTION");
         console.log('🧾 Datos recibidos en /api/sales:', req.body);
 
         try {
@@ -1218,7 +1277,7 @@ app.get('/api/cierres', async (req, res) => {
 app.post('/api/reset-data', authMiddleware, async (req, res) => {
     try {
         // Iniciar transacción
-        db.exec("BEGIN");
+        db.exec("BEGIN TRANSACTION");
 
         try {
             // Eliminar todos los items de venta
@@ -1465,7 +1524,7 @@ app.post('/api/promotions', async (req, res) => {
 
     try {
         // Iniciar transacción
-        db.exec("BEGIN");
+        db.exec("BEGIN TRANSACTION");
 
         try {
             // Crear promoción
