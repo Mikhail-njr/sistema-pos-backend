@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
 const basicAuth = require('express-basic-auth');
 const session = require('express-session');
 const { exec } = require('child_process');
@@ -95,27 +95,48 @@ app.use('/api/categories', protectWriteOperations);
 // Servir archivos frontend desde carpeta ../Frontend (AGREGADO)
 app.use(express.static(path.join(__dirname, '../Frontend'), { maxAge: 0 }));
 
-// Configuración de SQLite con better-sqlite3
+// Configuración de SQLite con sql.js
 const dbPath = path.join(__dirname, 'pos_database.sqlite');
 let db;
+let SQL;
 
-function initDatabaseConnection() {
+async function initDatabaseConnection() {
     try {
         console.log('🔄 Inicializando base de datos...');
 
-        // Crear/conectar a base de datos SQLite
-        db = new Database(dbPath);
+        // Inicializar sql.js
+        SQL = await initSqlJs();
 
-        // Configurar para mejor rendimiento
-        db.pragma('journal_mode = WAL');
-        db.pragma('synchronous = NORMAL');
+        // Intentar cargar base de datos existente
+        let filebuffer = null;
+        if (fs.existsSync(dbPath)) {
+            filebuffer = fs.readFileSync(dbPath);
+        }
+
+        // Crear base de datos
+        db = filebuffer ? new SQL.Database(filebuffer) : new SQL.Database();
 
         console.log('✅ Conectado a base de datos SQLite');
         initDatabase();
+
+        // Configurar guardado automático cada 30 segundos
+        setInterval(saveDatabase, 30000);
+
     } catch (error) {
         console.error('❌ Error inicializando base de datos:', error);
         console.error('Stack trace:', error.stack);
         process.exit(1);
+    }
+}
+
+function saveDatabase() {
+    try {
+        const data = db.export();
+        const buffer = Buffer.from(data);
+        fs.writeFileSync(dbPath, buffer);
+        console.log('💾 Base de datos guardada automáticamente');
+    } catch (error) {
+        console.error('❌ Error guardando base de datos:', error);
     }
 }
 
@@ -144,7 +165,7 @@ startServer();
 function initDatabase() {
     try {
         // Tabla productos
-        db.exec(`CREATE TABLE IF NOT EXISTS productos (
+        db.run(`CREATE TABLE IF NOT EXISTS productos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             codigo TEXT UNIQUE NOT NULL,
             nombre TEXT NOT NULL,
@@ -156,7 +177,7 @@ function initDatabase() {
         )`);
 
         // Tabla ventas
-        db.exec(`CREATE TABLE IF NOT EXISTS ventas (
+        db.run(`CREATE TABLE IF NOT EXISTS ventas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             numero_factura TEXT UNIQUE NOT NULL,
             total REAL NOT NULL,
@@ -166,7 +187,7 @@ function initDatabase() {
         )`);
 
         // Tabla items_venta
-        db.exec(`CREATE TABLE IF NOT EXISTS venta_items (
+        db.run(`CREATE TABLE IF NOT EXISTS venta_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             venta_id INTEGER NOT NULL,
             producto_id INTEGER NOT NULL,
@@ -180,7 +201,7 @@ function initDatabase() {
         )`);
 
         // Tabla cierres_caja
-        db.exec(`CREATE TABLE IF NOT EXISTS cierres_caja (
+        db.run(`CREATE TABLE IF NOT EXISTS cierres_caja (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
             dinero_inicial REAL NOT NULL,
@@ -191,7 +212,7 @@ function initDatabase() {
         )`);
 
         // Tabla proveedores (suppliers)
-        db.exec(`CREATE TABLE IF NOT EXISTS proveedores (
+        db.run(`CREATE TABLE IF NOT EXISTS proveedores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_proveedor TEXT NOT NULL,
             nombre_contacto TEXT,
@@ -205,14 +226,14 @@ function initDatabase() {
         )`);
 
         // Tabla promociones
-        db.exec(`CREATE TABLE IF NOT EXISTS promociones (
+        db.run(`CREATE TABLE IF NOT EXISTS promociones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
         // Tabla productos en promocion
-        db.exec(`CREATE TABLE IF NOT EXISTS promocion_productos (
+        db.run(`CREATE TABLE IF NOT EXISTS promocion_productos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             promocion_id INTEGER NOT NULL,
             producto_id INTEGER NOT NULL,
@@ -223,8 +244,8 @@ function initDatabase() {
         )`);
 
         // Verificar si hay datos
-        const result = db.prepare("SELECT COUNT(*) as count FROM productos").get();
-        if (result.count === 0) {
+        const result = dbAll("SELECT COUNT(*) as count FROM productos");
+        if (result.length === 0 || result[0].count === 0) {
             insertSampleData();
         }
 
@@ -263,11 +284,16 @@ function insertSampleData() {
     console.log('✅ Datos de ejemplo insertados en SQLite');
 }
 
-// Función para hacer queries más fácil (better-sqlite3)
+// Función para hacer queries más fácil (sql.js)
 function dbAll(query, params = []) {
     try {
         const stmt = db.prepare(query);
-        return stmt.all(params);
+        const results = [];
+        while (stmt.step()) {
+            results.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return results;
     } catch (error) {
         throw error;
     }
@@ -532,9 +558,16 @@ app.post('/api/generate-pdf-report', authMiddleware, async (req, res) => {
 
 function dbRun(query, params = []) {
     try {
-        const stmt = db.prepare(query);
-        const result = stmt.run(params);
-        return { id: result.lastInsertRowid, changes: result.changes };
+        // Para sql.js, necesitamos reemplazar los placeholders ? con los valores
+        let finalQuery = query;
+        params.forEach((param, index) => {
+            // Escapar comillas simples en strings
+            const escapedParam = typeof param === 'string' ? param.replace(/'/g, "''") : param;
+            finalQuery = finalQuery.replace('?', typeof param === 'string' ? `'${escapedParam}'` : param);
+        });
+
+        db.run(finalQuery);
+        return { id: db.exec("SELECT last_insert_rowid() as id")[0].values[0][0], changes: 1 };
     } catch (error) {
         throw error;
     }
@@ -868,7 +901,9 @@ app.post('/api/sales', async (req, res) => {
         console.log('🕒 Timestamp para factura:', Date.now());
 
         // Iniciar transacción
-        const transaction = db.transaction(() => {
+        db.run("BEGIN TRANSACTION");
+
+        try {
             console.log('🧾 Datos recibidos en /api/sales:', req.body);
 
             // Insertar venta
@@ -890,16 +925,19 @@ app.post('/api/sales', async (req, res) => {
                 );
             }
 
-            return saleResult;
-        });
+            db.run("COMMIT");
+            var saleResultFinal = saleResult;
 
-        const saleResult = transaction();
+        } catch (error) {
+            db.run("ROLLBACK");
+            throw error;
+        }
 
         res.json({
             success: true,
             factura: facturaNumber,
             total: total,
-            saleId: saleResult.id,
+            saleId: saleResultFinal.id,
             itemsWithDiscounts: itemsWithDiscounts,
             message: 'Venta registrada exitosamente en SQLite'
         });
@@ -1247,21 +1285,26 @@ app.get('/api/cierres', async (req, res) => {
 app.post('/api/reset-data', authMiddleware, async (req, res) => {
     try {
         // Iniciar transacción
-        const transaction = db.transaction(() => {
+        db.run("BEGIN TRANSACTION");
+
+        try {
             // Eliminar todos los items de venta
-            dbRun("DELETE FROM venta_items");
+            db.run("DELETE FROM venta_items");
 
             // Eliminar todas las ventas
-            dbRun("DELETE FROM ventas");
+            db.run("DELETE FROM ventas");
 
             // Eliminar todos los cierres de caja
-            dbRun("DELETE FROM cierres_caja");
+            db.run("DELETE FROM cierres_caja");
 
             // Resetear stock de productos (opcional, comentado)
-            // dbRun("UPDATE productos SET stock = 0");
-        });
+            // db.run("UPDATE productos SET stock = 0");
 
-        transaction();
+            db.run("COMMIT");
+        } catch (error) {
+            db.run("ROLLBACK");
+            throw error;
+        }
 
         res.json({
             success: true,
@@ -1488,7 +1531,9 @@ app.post('/api/promotions', async (req, res) => {
 
     try {
         // Iniciar transacción
-        const transaction = db.transaction(() => {
+        db.run("BEGIN TRANSACTION");
+
+        try {
             // Crear promoción
             const promoResult = dbRun(
                 "INSERT INTO promociones (nombre) VALUES (?)",
@@ -1510,16 +1555,18 @@ app.post('/api/promotions', async (req, res) => {
                 );
             }
 
-            return promoResult;
-        });
+            db.run("COMMIT");
 
-        const promoResult = transaction();
+            res.status(201).json({
+                success: true,
+                message: 'Promoción creada exitosamente',
+                promotion: { id: promoResult.id, nombre, productos }
+            });
 
-        res.status(201).json({
-            success: true,
-            message: 'Promoción creada exitosamente',
-            promotion: { id: promoResult.id, nombre, productos }
-        });
+        } catch (error) {
+            db.run("ROLLBACK");
+            throw error;
+        }
 
     } catch (error) {
         console.error('Error creando promoción:', error);
@@ -1928,7 +1975,7 @@ app.post('/api/demo-pdf', async (req, res) => {
 
 // Cerrar conexión al terminar
 process.on('SIGINT', () => {
-    db.close();
+    saveDatabase(); // Guardar antes de cerrar
     console.log('✅ Conexión a la base de datos cerrada');
     process.exit(0);
 });
