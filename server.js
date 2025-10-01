@@ -13,7 +13,11 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors({
-    origin: true,
+    origin: [
+        'https://punto-de-venta-web-f47e8.web.app',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000'
+    ],
     credentials: true
 }));
 app.use(express.json());
