@@ -101,37 +101,17 @@ let db;
 
 async function initDatabaseConnection() {
     try {
+        console.log('🔄 Inicializando base de datos...');
+
+        // Para Railway, usar base de datos en memoria por simplicidad
         const SQL = await initSqlJs();
-        let filebuffer = null;
+        db = new SQL.Database();
 
-        // Intentar cargar base de datos existente
-        if (fs.existsSync(dbPath)) {
-            filebuffer = fs.readFileSync(dbPath);
-        }
-
-        db = new SQL.Database(filebuffer);
-
-        // Función para guardar la base de datos
-        const saveDatabase = () => {
-            const data = db.export();
-            const buffer = Buffer.from(data);
-            fs.writeFileSync(dbPath, buffer);
-        };
-
-        // Guardar cada 30 segundos
-        setInterval(saveDatabase, 30000);
-
-        // Guardar al cerrar
-        process.on('SIGINT', () => {
-            saveDatabase();
-            console.log('✅ Conexión a la base de datos cerrada');
-            process.exit(0);
-        });
-
-        console.log('✅ Conectado a la base de datos SQLite (sql.js)');
+        console.log('✅ Base de datos SQLite inicializada (en memoria)');
         initDatabase();
     } catch (error) {
         console.error('❌ Error inicializando base de datos:', error);
+        console.error('Stack trace:', error.stack);
         process.exit(1);
     }
 }
