@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control del Sistema POS</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            padding: 30px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            background: #d8d8d86e;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.9);
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #37a388;
+            font-weight: bold;
+            color: #0c5358;
+            text-transform: uppercase;
+            font-size: 0.9em;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .loading, .error {
+            text-align: center;
+            padding: 20px;
+            color: #472001;
+        }
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .product-row {
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .product-row:hover {
+            background-color: #e8f4f8 !important;
+        }
+        .product-row.selected {
+            background-color: #d1ecf1 !important;
+            border-left: 4px solid #17a2b8;
+        }
+        .edit-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .edit-modal.show {
+            display: flex;
+        }
+        .edit-form {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #17a2b8;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        .btn-primary {
+            background: #17a2b8;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #138496;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        .edit-button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .edit-button:hover {
+            background: #218838;
+        }
+
+
+        /* Invoice Collapse/Expand Styles */
+        .invoice-card.collapsed .invoice-items,
+        .invoice-card.collapsed .invoice-total {
+            display: none;
+        }
+        .invoice-card.collapsed {
+            padding: 15px;
+        }
+        .invoice-card.collapsed .invoice-header {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        .collapse-icon {
+            float: right;
+            cursor: pointer;
+            font-size: 18px;
+            color: #666;
+            transition: transform 0.3s;
+        }
+        .collapse-icon:hover {
+            color: #333;
+        }
+        .invoice-card.collapsed .collapse-icon {
+            transform: rotate(180deg);
+        }
+
+        /* Dashboard Section Collapse/Expand Styles */
+        .dashboard-section.collapsed .section-content {
+            display: none;
+        }
+        .dashboard-section.collapsed {
+            margin-bottom: 20px;
+        }
+        .section-header {
+            cursor: pointer;
+            position: relative;
+            padding-right: 30px;
+        }
+        .section-icon {
+            position: absolute;
+            right: 0;
+            top: 0;
+            cursor: pointer;
+            font-size: 18px;
+            color: #666;
+            transition: transform 0.3s;
+        }
+        .section-icon:hover {
+            color: #333;
+        }
+        .dashboard-section.collapsed .section-icon {
+            transform: rotate(180deg);
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h1>📊 Panel de Control del Sistema POS</h1>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="number" id="dineroInicial" step="0.01" min="0" placeholder="Dinero Inicial" style="padding: 8px; border: 2px solid #ddd; border-radius: 6px;">
+                    <button id="closeRegisterBtn" class="btn btn-primary" style="font-size: 14px; padding: 8px 16px;">
+                        🧮 Cierre de Caja
+                    </button>
+                </div>
+                <button id="loginBtn" onclick="login()" style="padding: 10px 20px; background: #17a2b8; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                    Iniciar Sesión
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal de Cierre de Caja -->
+        <div id="cierreModal" class="edit-modal">
+            <div class="edit-form">
+                <h3 style="margin-bottom: 20px; color: #2c3e50;">🧮 Resultados del Cierre de Caja</h3>
+                <div class="cierre-resultados">
+                    <p><strong>Dinero Inicial:</strong> <span id="cierre-inicial">$0.00</span></p>
+                    <p><strong>Total Ventas:</strong> <span id="cierre-total">$0.00</span></p>
+                    <p><strong>Total Esperado:</strong> <span id="cierre-esperado">$0.00</span></p>
+                    <p><strong>Diferencia:</strong> <span id="cierre-diferencia">$0.00</span></p>
+                    <p><strong>Cantidad de Ventas:</strong> <span id="cierre-cantidad">0</span></p>
+                    <p><strong>Fecha:</strong> <span id="cierre-fecha">-</span></p>
+                </div>
+                <div class="button-group" style="margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeCierreModal()">Cerrar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Métricas de Ventas -->
+        <div id="metricas-section" class="dashboard-section collapsed">
+            <h2 class="section-header">📈 Métricas de Ventas <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div class="metricas-container">
+                    <div class="metricas-grid">
+                        <div class="metrica-card">
+                            <h3>Productos Más Vendidos</h3>
+                            <table id="top-products-table">
+                                <thead>
+                                    <tr>
+                                        <th>Posición</th>
+                                        <th>Producto</th>
+                                        <th>Código</th>
+                                        <th>Cantidad Vendida</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Historial de Cierres -->
+        <div id="historial-cierres-section" class="dashboard-section collapsed">
+            <h2 class="section-header">📋 Historial de Cierres de Caja <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div class="loading">Cargando historial...</div>
+                <table id="historial-cierres-table" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Dinero Inicial</th>
+                            <th>Total Ventas</th>
+                            <th>Total Esperado</th>
+                            <th>Diferencia</th>
+                            <th>Cantidad Ventas</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Sección de Productos -->
+        <div id="productos-section" class="dashboard-section collapsed">
+            <h2 class="section-header">📦 Productos Disponibles <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="openAddProductModal()" style="font-size: 14px; padding: 10px 20px;">
+                        ➕ Agregar Nuevo Producto
+                    </button>
+                    <button id="editSelectedBtn" class="btn btn-secondary" disabled style="font-size: 14px; padding: 10px 20px; margin-left: 10px;">
+                        ✏️ Editar Producto
+                    </button>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-secondary" onclick="alert('Usa Ctrl+F para buscar en la página')">🔍 Buscar</button>
+                </div>
+                <div class="loading">Cargando productos...</div>
+                <table id="productos-table" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Seleccionar</th>
+                            <th>ID</th>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Categoría</th>
+                            <th>Precio</th>
+                            <th>Stock</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Sección de Ventas -->
+        <div id="ventas-section" class="dashboard-section collapsed">
+            <h2 class="section-header">🧾 Ventas Registradas <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div class="loading">Cargando ventas...</div>
+                <div id="ventas-container" style="display:none;">
+                    <!-- Las ventas se mostrarán aquí agrupadas por factura -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Detalles -->
+        <div id="items-venta-section" class="dashboard-section collapsed">
+            <h2 class="section-header">🛒 Detalle de Productos Vendidos <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div class="loading">Cargando detalles de ventas...</div>
+                <table id="items-venta-table" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>ID Venta</th>
+                            <th>ID Producto</th>
+                            <th>Nombre del Producto</th>
+                            <th>Cantidad</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal de edición de producto -->
+        <div id="editModal" class="edit-modal">
+            <div class="edit-form">
+                <h3 style="margin-bottom: 20px; color: #2c3e50;">✏️ Editar Producto</h3>
+                <form id="editProductForm">
+                    <input type="hidden" id="editProductId">
+
+                    <div class="form-group">
+                        <label for="editCodigo">Código:</label>
+                        <input type="text" id="editCodigo" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editNombre">Nombre:</label>
+                        <input type="text" id="editNombre" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editDescripcion">Descripción:</label>
+                        <input type="text" id="editDescripcion">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editPrecio">Precio:</label>
+                        <input type="number" id="editPrecio" step="0.01" min="0" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editStock">Stock:</label>
+                        <input type="number" id="editStock" min="0" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editCategoria">Categoría:</label>
+                        <input type="text" id="editCategoria">
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de agregar producto -->
+        <div id="addModal" class="edit-modal">
+            <div class="edit-form">
+                <h3 style="margin-bottom: 20px; color: #2c3e50;">➕ Agregar Nuevo Producto</h3>
+                <form id="addProductForm">
+                    <div class="form-group">
+                        <label for="addCodigo">Código:</label>
+                        <input type="text" id="addCodigo" required placeholder="Ej: PROD-001">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addNombre">Nombre:</label>
+                        <input type="text" id="addNombre" required placeholder="Nombre del producto">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addDescripcion">Descripción:</label>
+                        <input type="text" id="addDescripcion" placeholder="Descripción opcional">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addPrecio">Precio:</label>
+                        <input type="number" id="addPrecio" step="0.01" min="0" required placeholder="0.00">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addStock">Stock:</label>
+                        <input type="number" id="addStock" min="0" required placeholder="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addCategoria">Categoría:</label>
+                        <input type="text" id="addCategoria" placeholder="Categoría del producto">
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Crear Producto</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // API_BASE ya está declarado en script.js
+        // isLoggedIn y authCredentials también están en script.js
+
+        function formatCurrency(amount) {
+            return `$${parseFloat(amount).toFixed(2).replace('.', ',')}`;
+        }
+
+        function showAlert(message, type) {
+            let alert = document.createElement('div');
+            alert.className = `alert ${type}`;
+            alert.textContent = message;
+            document.body.appendChild(alert);
+            setTimeout(() => alert.remove(), 2000);
+        }
+
+        async function fetchAndDisplayData() {
+            const headers = { 'Content-Type': 'application/json' };
+            if (authCredentials) {
+                headers['Authorization'] = 'Basic ' + btoa(authCredentials.username + ':' + authCredentials.password);
+            }
+
+            // Fetch de productos
+            try {
+                const productosRes = await fetch(`${API_BASE}/products`, { headers });
+                if (productosRes.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!productosRes.ok) throw new Error('Network response for products was not ok');
+                const productos = await productosRes.json();
+                displayTableData('productos', productos);
+            } catch (error) {
+                console.error('Error fetching products:', error);
+                const productosSection = document.querySelector('#productos-section');
+                if (productosSection) {
+                    productosSection.innerHTML = '<div class="error">Error al cargar productos. Asegúrate de que el servidor esté activo y que el endpoint /api/products funcione.</div>';
+                }
+            }
+
+            // Fetch de ventas
+            try {
+                console.log('Fetching sales data...');
+                const ventasRes = await fetch(`${API_BASE}/sales`, { headers });
+                console.log('Sales response status:', ventasRes.status);
+                if (ventasRes.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!ventasRes.ok) throw new Error('Network response for sales was not ok');
+                const ventas = await ventasRes.json();
+                console.log('Sales data received:', ventas);
+                displaySalesGrouped(ventas);
+            } catch (error) {
+                console.error('Error fetching sales:', error);
+                const ventasSection = document.querySelector('#ventas-section');
+                if (ventasSection) {
+                    ventasSection.innerHTML = '<div class="error">Error al cargar ventas. Asegúrate de que el servidor esté activo y que el endpoint /api/sales funcione.</div>';
+                }
+            }
+
+            // Fetch de items de ventas
+            try {
+                const itemsVentaRes = await fetch(`${API_BASE}/items`, { headers });
+                if (itemsVentaRes.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!itemsVentaRes.ok) throw new Error('Network response for items was not ok');
+                const itemsVenta = await itemsVentaRes.json();
+                displayTableData('items-venta', itemsVenta);
+            } catch (error) {
+                console.error('Error fetching items:', error);
+                const itemsSection = document.querySelector('#items-venta-section');
+                if (itemsSection) {
+                    itemsSection.innerHTML = '<div class="error">Error al cargar items de ventas. Asegúrate de que el servidor esté activo y que el endpoint /api/items funcione.</div>';
+                }
+            }
+        }
+
+        function displayTableData(dataType, data) {
+            let container, table, tbody, loading;
+
+            if (dataType === 'productos') {
+                container = document.querySelector('#productos-section');
+                table = document.querySelector('#productos-table');
+                loading = document.querySelector('#productos-section .loading');
+            } else if (dataType === 'items-venta') {
+                container = document.querySelector('#items-venta-section');
+                table = document.querySelector('#items-venta-table');
+                loading = document.querySelector('#items-venta-section .loading');
+            }
+
+            if (!container || !table) {
+                console.warn(`Container or table not found for ${dataType}`);
+                return;
+            }
+
+            tbody = table.querySelector('tbody');
+            if (!tbody) {
+                console.warn(`Table body not found for ${dataType}`);
+                return;
+            }
+
+            if (data && data.length > 0) {
+                table.style.display = 'table';
+                if (loading) loading.style.display = 'none';
+
+                tbody.innerHTML = '';
+                data.forEach(item => {
+                    const row = document.createElement('tr');
+                    let rowContent = '';
+
+                    if (dataType === 'productos') {
+                        rowContent = `
+                            <td><input type="checkbox" class="product-checkbox" data-product-id="${item.id}"></td>
+                            <td>${item.id}</td>
+                            <td>${item.codigo}</td>
+                            <td>${item.nombre}</td>
+                            <td>${item.categoria || ''}</td>
+                            <td>${formatCurrency(item.precio)}</td>
+                            <td>${item.stock}</td>
+                            <td><button class="edit-button" onclick="editProduct(${item.id})">Editar</button></td>
+                        `;
+                        row.className = 'product-row';
+                        row.setAttribute('data-product-id', item.id);
+                    } else if (dataType === 'items-venta') {
+                        const subtotal = item.cantidad * item.precio_unitario;
+                        rowContent = `
+                            <td>${item.venta_id}</td>
+                            <td>${item.producto_id}</td>
+                            <td>${item.nombre_producto}</td>
+                            <td>${item.cantidad}</td>
+                            <td>${formatCurrency(subtotal)}</td>
+                        `;
+                    }
+
+                    row.innerHTML = rowContent;
+                    tbody.appendChild(row);
+                });
+
+                // Sección actualizada correctamente
+            } else {
+                table.style.display = 'none';
+                if (loading) {
+                    loading.textContent = `No hay ${dataType === 'productos' ? 'productos' : 'detalles de ventas'} registrados.`;
+                    loading.style.display = 'block';
+                }
+
+                // Sección sin datos
+            }
+        }
+
+        // Variables para el estado de edición
+        let selectedProductId = null;
+
+        // Función para editar producto
+        async function editProduct(productId) {
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (authCredentials) {
+                    headers['Authorization'] = 'Basic ' + btoa(authCredentials.username + ':' + authCredentials.password);
+                }
+                // Obtener datos del producto
+                const response = await fetch(`${API_BASE}/products/${productId}`, { headers });
+                if (response.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!response.ok) throw new Error('Error al obtener producto');
+
+                const product = await response.json();
+
+                // Llenar el formulario con los datos actuales
+                document.getElementById('editProductId').value = product.id;
+                document.getElementById('editCodigo').value = product.codigo;
+                document.getElementById('editNombre').value = product.nombre;
+                document.getElementById('editDescripcion').value = product.descripcion || '';
+                document.getElementById('editPrecio').value = product.precio;
+                document.getElementById('editStock').value = product.stock;
+                document.getElementById('editCategoria').value = product.categoria || '';
+
+                // Mostrar el modal
+                document.getElementById('editModal').classList.add('show');
+
+            } catch (error) {
+                console.error('Error al cargar producto para editar:', error);
+                alert('Error al cargar el producto para editar');
+            }
+        }
+
+        // Función para cerrar el modal de edición
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('show');
+            document.getElementById('editProductForm').reset();
+            selectedProductId = null;
+        }
+
+        // Función para guardar cambios del producto
+        async function saveProductChanges(event) {
+            event.preventDefault();
+
+            const productId = document.getElementById('editProductId').value;
+            const formData = {
+                codigo: document.getElementById('editCodigo').value.trim(),
+                nombre: document.getElementById('editNombre').value.trim(),
+                descripcion: document.getElementById('editDescripcion').value.trim(),
+                precio: parseFloat(document.getElementById('editPrecio').value),
+                stock: parseInt(document.getElementById('editStock').value),
+                categoria: document.getElementById('editCategoria').value.trim()
+            };
+
+            // Validaciones básicas
+            if (!formData.codigo || !formData.nombre || isNaN(formData.precio) || isNaN(formData.stock)) {
+                alert('Por favor complete todos los campos requeridos correctamente');
+                return;
+            }
+
+            if (formData.precio < 0 || formData.stock < 0) {
+                alert('El precio y stock no pueden ser negativos');
+                return;
+            }
+
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (authCredentials) {
+                    headers['Authorization'] = 'Basic ' + btoa(authCredentials.username + ':' + authCredentials.password);
+                }
+                const response = await fetch(`${API_BASE}/products/${productId}`, {
+                    method: 'PUT',
+                    headers: headers,
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Error al actualizar producto');
+                }
+
+                const result = await response.json();
+
+                // Cerrar modal
+                closeEditModal();
+
+                // Mostrar mensaje de éxito
+                alert('Producto actualizado exitosamente');
+
+                // Recargar los datos
+                await fetchAndDisplayData();
+
+            } catch (error) {
+                console.error('Error al guardar cambios:', error);
+                alert('Error al guardar cambios: ' + error.message);
+            }
+        }
+
+        // Función para abrir modal de agregar producto
+        function openAddProductModal() {
+            document.getElementById('addProductForm').reset();
+            document.getElementById('addModal').classList.add('show');
+        }
+
+        // Función para cerrar modal de agregar producto
+        function closeAddModal() {
+            document.getElementById('addModal').classList.remove('show');
+            document.getElementById('addProductForm').reset();
+        }
+
+        // Función para crear nuevo producto
+        async function createProduct(event) {
+            event.preventDefault();
+
+            const formData = {
+                codigo: document.getElementById('addCodigo').value.trim(),
+                nombre: document.getElementById('addNombre').value.trim(),
+                descripcion: document.getElementById('addDescripcion').value.trim(),
+                precio: parseFloat(document.getElementById('addPrecio').value),
+                stock: parseInt(document.getElementById('addStock').value),
+                categoria: document.getElementById('addCategoria').value.trim()
+            };
+
+            // Validaciones básicas
+            if (!formData.codigo || !formData.nombre || isNaN(formData.precio) || isNaN(formData.stock)) {
+                alert('Por favor complete todos los campos requeridos correctamente');
+                return;
+            }
+
+            if (formData.precio < 0 || formData.stock < 0) {
+                alert('El precio y stock no pueden ser negativos');
+                return;
+            }
+
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (authCredentials) {
+                    headers['Authorization'] = 'Basic ' + btoa(authCredentials.username + ':' + authCredentials.password);
+                }
+                const response = await fetch(`${API_BASE}/products`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Error al crear producto');
+                }
+
+                const result = await response.json();
+
+                // Cerrar modal
+                closeAddModal();
+
+                // Mostrar mensaje de éxito
+                alert('Producto creado exitosamente');
+
+                // Recargar los datos
+                await fetchAndDisplayData();
+
+            } catch (error) {
+                console.error('Error al crear producto:', error);
+                alert('Error al crear producto: ' + error.message);
+            }
+        }
+
+        // Event listeners para el formulario de edición
+        document.getElementById('editProductForm').addEventListener('submit', saveProductChanges);
+
+        // Event listeners para el formulario de agregar producto
+        document.getElementById('addProductForm').addEventListener('submit', createProduct);
+
+        // Cerrar modales al hacer clic fuera
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEditModal();
+            }
+        });
+
+        document.getElementById('addModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddModal();
+            }
+        });
+
+        // Event listeners para secciones colapsables
+        document.querySelectorAll('.section-header').forEach(header => {
+            header.addEventListener('click', function() {
+                const section = this.closest('.dashboard-section');
+                section.classList.toggle('collapsed');
+                const icon = this.querySelector('.section-icon');
+                if (section.classList.contains('collapsed')) {
+                    icon.textContent = '▶';
+                } else {
+                    icon.textContent = '▼';
+                }
+            });
+        });
+
+        // Función para actualizar el estado del botón editar
+        function updateEditButton() {
+            const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+            const editBtn = document.getElementById('editSelectedBtn');
+            editBtn.disabled = checkedBoxes.length === 0;
+            if (checkedBoxes.length > 0) {
+                editBtn.classList.remove('btn-secondary');
+                editBtn.classList.add('btn-primary');
+            } else {
+                editBtn.classList.remove('btn-primary');
+                editBtn.classList.add('btn-secondary');
+            }
+        }
+
+        // Event listeners para checkboxes de productos
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('product-checkbox')) {
+                // Para selección única, desmarcar otros
+                if (e.target.checked) {
+                    document.querySelectorAll('.product-checkbox').forEach(cb => {
+                        if (cb !== e.target) cb.checked = false;
+                    });
+                }
+                updateEditButton();
+            }
+        });
+
+        // Event listener para el botón editar
+        document.getElementById('editSelectedBtn').addEventListener('click', function() {
+            const checkedBox = document.querySelector('.product-checkbox:checked');
+            if (checkedBox) {
+                const productId = checkedBox.getAttribute('data-product-id');
+                editProduct(productId);
+            }
+        });
+
+        // Función especial para mostrar ventas agrupadas por factura
+        function displaySalesGrouped(sales) {
+            console.log('displaySalesGrouped called with:', sales);
+
+            // Buscar el contenedor en la sección de ventas
+            const container = document.querySelector('#ventas-container');
+            const section = document.querySelector('#ventas-section');
+            const loading = section ? section.querySelector('.loading') : null;
+
+            console.log('Container found:', !!container);
+            console.log('Section found:', !!section);
+            console.log('Loading found:', !!loading);
+
+            if (!container) {
+                console.error('Ventas container not found!');
+                return;
+            }
+
+            if (sales && sales.length > 0) {
+                console.log('Displaying', sales.length, 'sales');
+
+                // Asegurar que el contenedor sea visible
+                container.style.display = 'block';
+
+                // Ocultar loading si existe
+                if (loading) {
+                    loading.style.display = 'none';
+                    console.log('Loading hidden');
+                }
+
+
+                // Generar HTML para las ventas
+                const salesHTML = sales.map(sale => `
+                    <div class="invoice-card collapsed" style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; background: #fafafa;">
+                        <div class="invoice-header" style="border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 15px; position: relative;">
+                            <span class="collapse-icon" onclick="toggleInvoice(this)" title="Expandir/Contraer" style="cursor: pointer; font-size: 18px; color: #666;">▶</span>
+                            <h3 style="margin: 0; color: #2c3e50;">Factura: ${sale.numero_factura}</h3>
+                            <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                                <span><strong>Fecha:</strong> ${new Date(sale.fecha).toLocaleString()}</span>
+                                <span><strong>Método:</strong> ${sale.metodo_pago}</span>
+                                <span style="color: #27ae60; font-weight: bold;">Total: ${formatCurrency(sale.total)}</span>
+                            </div>
+                        </div>
+
+                        <div class="invoice-items" style="margin-bottom: 15px;">
+                            <h4 style="margin: 5px 0; color: #34495e;">Productos:</h4>
+                            ${sale.items && sale.items.length > 0 ? sale.items.map(item => `
+                                <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee;">
+                                    <span>${item.nombre || 'Producto desconocido'}</span>
+                                    <span>${item.cantidad || 0} × ${formatCurrency(item.precio_unitario || 0)} = ${formatCurrency(item.subtotal || 0)}</span>
+                                </div>
+                            `).join('') : '<div style="padding: 10px; color: #666;">No hay productos en esta venta</div>'}
+                        </div>
+
+                        <div class="invoice-total" style="text-align: right; font-size: 18px; font-weight: bold; color: #27ae60; border-top: 2px solid #bdc3c7; padding-top: 10px;">
+                            Total: ${formatCurrency(sale.total || 0)}
+                        </div>
+                    </div>
+                `).join('');
+
+                console.log('Generated HTML length:', salesHTML.length);
+                console.log('Generated HTML preview:', salesHTML.substring(0, 200) + '...');
+                container.innerHTML = salesHTML;
+                console.log('HTML set to container');
+
+            } else {
+                console.log('No sales to display');
+                container.style.display = 'none';
+                if (loading) {
+                    loading.textContent = 'No hay ventas registradas.';
+                    loading.style.display = 'block';
+                }
+
+            }
+        }
+
+
+        // Función para expandir/contraer facturas
+        function toggleInvoice(iconElement) {
+            const invoiceCard = iconElement.closest('.invoice-card');
+            invoiceCard.classList.toggle('collapsed');
+
+            // Cambiar el icono
+            if (invoiceCard.classList.contains('collapsed')) {
+                iconElement.textContent = '▶';
+            } else {
+                iconElement.textContent = '▼';
+            }
+        }
+
+
+        // Funciones de autenticación
+        function login() {
+            const username = prompt('Usuario:');
+            const password = prompt('Contraseña:');
+
+            if (username && password) {
+                authCredentials = { username, password };
+                isLoggedIn = true;
+                sessionStorage.setItem('authCredentials', JSON.stringify(authCredentials));
+                updateUIBasedOnAuth();
+                alert('✅ Sesión iniciada correctamente');
+                fetchAndDisplayData(); // Recargar datos después del login
+            }
+        }
+
+        function logout() {
+            authCredentials = null;
+            isLoggedIn = false;
+            sessionStorage.removeItem('authCredentials');
+            updateUIBasedOnAuth();
+            alert('👋 Sesión cerrada');
+            // Redirigir al inicio si se cierra sesión desde dashboard
+            window.location.href = 'index.html';
+        }
+
+        function updateUIBasedOnAuth() {
+            const loginBtn = document.getElementById('loginBtn');
+            if (loginBtn) {
+                loginBtn.textContent = isLoggedIn ? 'Cerrar Sesión' : 'Iniciar Sesión';
+                loginBtn.onclick = isLoggedIn ? logout : login;
+            }
+        }
+
+        // Verificar autenticación al cargar dashboard
+        function checkDashboardAccess() {
+            if (!isLoggedIn) {
+                alert('Debes iniciar sesión para acceder al Panel de Control');
+                window.location.href = 'index.html';
+                return false;
+            }
+            return true;
+        }
+
+        // Cargar credenciales al iniciar
+        function loadAuthFromStorage() {
+            const stored = sessionStorage.getItem('authCredentials');
+            if (stored) {
+                authCredentials = JSON.parse(stored);
+                isLoggedIn = true;
+            }
+            updateUIBasedOnAuth();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAuthFromStorage();
+            if (checkDashboardAccess()) {
+                fetchAndDisplayData();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+🚀 Servidor ejecutándose en http://localhost:3000
+🌐 También disponible en la red local (reemplaza localhost con tu IP)
+📦 API disponible en http://localhost:3000/api/products
+📊 Estadísticas: http://localhost:3000/api/stats
+🔧 Diagnóstico: http://localhost:3000/api/diagnostic
+💾 Base de datos: F:\WEB\sistema-pos\backend\pos_database.sqlite
+🌐 Frontend disponible en http://localhost:3000
+✅ Conectado a la base de datos SQLite
