@@ -136,7 +136,26 @@ async function initDatabaseConnection() {
     }
 }
 
-initDatabaseConnection();
+async function startServer() {
+    await initDatabaseConnection();
+
+    // Iniciar servidor
+    app.listen(PORT, () => {
+        console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
+        console.log(`🌐 También disponible en la red local (reemplaza localhost con tu IP)`);
+        console.log(`📦 API disponible en http://localhost:${PORT}/api/products`);
+        console.log(`📊 Estadísticas: http://localhost:${PORT}/api/stats`);
+        console.log(`🔧 Diagnóstico: http://localhost:${PORT}/api/diagnostic`);
+        console.log(`💾 Base de datos: ${dbPath}`);
+        console.log(`🌐 Frontend disponible en http://localhost:${PORT}`);
+
+        // Limpiar archivos temporales antiguos al iniciar
+        cleanupTempFiles();
+        console.log('📧 Los reportes PDF se generan y se preparan para envío por Gmail');
+    });
+}
+
+startServer();
 
 // Inicializar la base de datos
 function initDatabase() {
@@ -1764,20 +1783,6 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Error interno del servidor' });
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-    console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
-    console.log(`🌐 También disponible en la red local (reemplaza localhost con tu IP)`);
-    console.log(`📦 API disponible en http://localhost:${PORT}/api/products`);
-    console.log(`📊 Estadísticas: http://localhost:${PORT}/api/stats`);
-    console.log(`🔧 Diagnóstico: http://localhost:${PORT}/api/diagnostic`);
-    console.log(`💾 Base de datos: ${dbPath}`);
-    console.log(`🌐 Frontend disponible en http://localhost:${PORT}`);
-
-    // Limpiar archivos temporales antiguos al iniciar
-    cleanupTempFiles();
-    console.log('📧 Los reportes PDF se generan y se preparan para envío por Gmail');
-});
 
 // Endpoint temporal para mostrar PDF generado (sin autenticación - solo para demo)
 app.post('/api/demo-pdf', async (req, res) => {
