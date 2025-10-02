@@ -1,0 +1,1863 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control del Sistema POS</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #585d64;
+            color: #333;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            padding: 30px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            background: #d8d8d86e;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.9);
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #37a388;
+            font-weight: bold;
+            color: #0c5358;
+            text-transform: uppercase;
+            font-size: 0.9em;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .loading, .error {
+            text-align: center;
+            padding: 20px;
+            color: #472001;
+        }
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .product-row {
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .product-row:hover {
+            background-color: #e8f4f8 !important;
+        }
+        .product-row.selected {
+            background-color: #d1ecf1 !important;
+            border-left: 4px solid #17a2b8;
+        }
+        .edit-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .edit-modal.show {
+            display: flex;
+        }
+        .edit-form {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #17a2b8;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        .btn-primary {
+            background: #17a2b8;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #138496;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        .edit-button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .edit-button:hover {
+            background: #218838;
+        }
+
+
+        /* Invoice Collapse/Expand Styles */
+        .invoice-card.collapsed .invoice-items,
+        .invoice-card.collapsed .invoice-total {
+            display: none;
+        }
+        .invoice-card.collapsed {
+            padding: 15px;
+        }
+        .invoice-card.collapsed .invoice-header {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        .collapse-icon {
+            float: right;
+            cursor: pointer;
+            font-size: 18px;
+            color: #666;
+            transition: transform 0.3s;
+        }
+        .collapse-icon:hover {
+            color: #333;
+        }
+        .invoice-card.collapsed .collapse-icon {
+            transform: rotate(180deg);
+        }
+
+        /* Dashboard Section Collapse/Expand Styles */
+        .dashboard-section.collapsed .section-content {
+            display: none;
+        }
+        .dashboard-section.collapsed {
+            margin: 10px 0 20px 0;
+        }
+
+        /* Highlight expanded sections */
+        .dashboard-section:not(.collapsed) {
+            background: linear-gradient(135deg, #9dd9e0 0%, #041ca1 100%);
+            border: 1px solid #870a92ea;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(9, 117, 167, 0.308);
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .section-header {
+            cursor: pointer;
+            position: relative;
+            padding-right: 30px;
+        }
+        .section-icon {
+            position: absolute;
+            right: 0;
+            top: 0;
+            cursor: pointer;
+            font-size: 18px;
+            color: #28a745;
+            transition: transform 0.3s;
+        }
+        .section-icon:hover {
+            color: #1e7e34;
+        }
+        .dashboard-section.collapsed .section-icon {
+            transform: rotate(180deg);
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h1>📊 Panel de Control del Sistema POS</h1>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="number" id="dineroInicial" step="0.01" min="0" placeholder="500,00" style="padding: 8px; border: 2px solid #ddd; border-radius: 6px;">
+                    <button id="closeRegisterBtn" class="btn btn-primary" style="font-size: 14px; padding: 8px 16px;">
+                        🧮 Cierre de Caja
+                    </button>
+                    <button id="resetDataBtn" class="btn btn-secondary" style="font-size: 14px; padding: 8px 16px; background: #dc3545; color: white;" onclick="resetData()">
+                        🔄 Reset Datos
+                    </button>
+                    <button id="sendEmailBtn" class="btn btn-primary" style="font-size: 14px; padding: 8px 16px; background: #28a745; color: white;" onclick="sendSalesReport()">
+                        📧 Enviar Reporte por Email
+                    </button>
+                    <button id="backToIndexBtn" onclick="window.location.href='index.html'" style="font-size: 14px; padding: 8px 16px; background: #6f42c1; color: white;" class="btn btn-secondary">
+                        🏠 Volver al Inicio
+                    </button>
+                </div>
+                <button id="loginBtn" onclick="login()" style="padding: 10px 20px; background: #17a2b8; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                    Iniciar Sesión
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal de Cierre de Caja -->
+        <div id="cierreModal" class="edit-modal">
+            <div class="edit-form">
+                <h3 style="margin-bottom: 20px; color: #2c3e50;">🧮 Cierre de Caja</h3>
+
+                <!-- Sección de entrada (solo dinero inicial) -->
+                <div id="cierre-input-section" style="margin-bottom: 20px;">
+                    <label for="dineroInicial" style="display: block; margin-bottom: 5px; font-weight: 500;">Dinero Inicial del Día:</label>
+                    <input type="number" id="dineroInicial" step="0.01" min="0" placeholder="500.00" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 6px; font-size: 14px;">
+                </div>
+
+                <!-- Sección de resultados (oculta inicialmente) -->
+                <div id="cierre-results-section" style="display: none;">
+                    <div class="cierre-resultados">
+                        <h4 style="margin-bottom: 15px; color: #2c3e50;">📊 Resultados del Cierre</h4>
+                        <p><strong>Dinero Inicial:</strong> <span id="cierre-inicial">$0,00</span></p>
+                        <p><strong>Total Ventas:</strong> <span id="cierre-total">$0,00</span></p>
+                        <div id="cierre-payment-totals" style="display: none; margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                            <h5 style="margin: 0 0 10px 0; color: #2c3e50;">💳 Pagos por Método:</h5>
+                            <!-- Los totales por método de pago se mostrarán aquí -->
+                        </div>
+                        <p><strong>Total Esperado:</strong> <span id="cierre-esperado">$0,00</span></p>
+                        <p><strong>Diferencia:</strong> <span id="cierre-diferencia">$0,00</span></p>
+                        <p><strong>Cantidad de Ventas:</strong> <span id="cierre-cantidad">0</span></p>
+                        <p><strong>Fecha:</strong> <span id="cierre-fecha">-</span></p>
+                    </div>
+                    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; padding: 15px; margin: 15px 0; font-size: 14px;">
+                        <strong>⚠️ Revisar Información:</strong> Verifique que los cálculos sean correctos antes de confirmar el cierre.
+                    </div>
+                </div>
+
+                <div class="button-group" style="margin-top: 20px;">
+                    <button type="button" class="btn btn-primary" onclick="calculateCloseRegister()">Calcular Cierre</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeCierreModal()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Productos -->
+        <div id="productos-section" class="dashboard-section collapsed">
+            <h2 class="section-header">📦 Productos Disponibles <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="openAddProductModal()" style="font-size: 14px; padding: 10px 20px;">
+                        ➕ Agregar Nuevo Producto
+                    </button>
+                    <button id="editSelectedBtn" class="btn btn-secondary" disabled style="font-size: 14px; padding: 10px 20px; margin-left: 10px;">
+                        ✏️ Editar Producto
+                    </button>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-secondary" onclick="alert('Usa Ctrl+F para buscar en la página')">🔍 Buscar</button>
+                    <button id="sortBtn" class="btn btn-secondary" onclick="toggleSortMode()" style="margin-left: 10px;">📊 Stock ↓</button>
+                </div>
+                <div class="loading">Cargando productos...</div>
+                <table id="productos-table" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Seleccionar</th>
+                            <th>ID</th>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Categoría</th>
+                            <th>Precio</th>
+                            <th>Stock</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Sección de Ventas -->
+        <div id="ventas-section" class="dashboard-section collapsed">
+            <h2 class="section-header">🧾 Ventas Registradas <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div class="loading">Cargando ventas...</div>
+                <div id="ventas-container" style="display:none;">
+                    <!-- Las ventas se mostrarán aquí agrupadas por factura -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Promociones -->
+        <div id="promociones-section" class="dashboard-section collapsed">
+            <h2 class="section-header">🏷️ Promociones <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="openCreatePromotionModal()" style="font-size: 14px; padding: 10px 20px;">
+                        ➕ Armar Promoción
+                    </button>
+                </div>
+                <div class="loading">Cargando promociones...</div>
+                <div id="promociones-container" style="display:none;">
+                    <!-- Las promociones se mostrarán aquí -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Métricas de Ventas -->
+        <div id="metricas-section" class="dashboard-section collapsed">
+            <h2 class="section-header">📈 Métricas de Ventas <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div class="metricas-container">
+                    <div class="metricas-grid">
+                        <div class="metrica-card">
+                            <h3>Productos Más Vendidos</h3>
+                            <table id="top-products-table">
+                                <thead>
+                                    <tr>
+                                        <th>Posición</th>
+                                        <th>Producto</th>
+                                        <th>Código</th>
+                                        <th>Cantidad Vendida</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Historial de Cierres -->
+        <div id="historial-cierres-section" class="dashboard-section collapsed">
+            <h2 class="section-header">📋 Historial de Cierres de Caja <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div class="loading">Cargando historial...</div>
+                <table id="historial-cierres-table" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Dinero Inicial</th>
+                            <th>Total Ventas</th>
+                            <th>Total Esperado</th>
+                            <th>Diferencia</th>
+                            <th>Cantidad Ventas</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Sección de Detalles -->
+        <div id="items-venta-section" class="dashboard-section collapsed">
+            <h2 class="section-header">🛒 Detalle de Productos Vendidos <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div class="loading">Cargando detalles de ventas...</div>
+                <table id="items-venta-table" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>ID Venta</th>
+                            <th>ID Producto</th>
+                            <th>Nombre del Producto</th>
+                            <th>Cantidad</th>
+                            <th>Precio Unitario</th>
+                            <th>Descuento</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Sección de Proveedores -->
+        <div id="proveedores-section" class="dashboard-section collapsed">
+            <h2 class="section-header">🏢 Proveedores <span class="section-icon">▶</span></h2>
+            <div class="section-content">
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="openAddSupplierModal()" style="font-size: 14px; padding: 10px 20px;">
+                        ➕ Agregar Proveedor
+                    </button>
+                </div>
+                <div class="loading">Cargando proveedores...</div>
+                <table id="proveedores-table" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre del Proveedor</th>
+                            <th>Nombre de Contacto</th>
+                            <th>Teléfono</th>
+                            <th>Email</th>
+                            <th>Productos/Servicios</th>
+                            <th>Cond. de Pago</th>
+                            <th>Estatus</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal de edición de producto -->
+        <div id="editModal" class="edit-modal">
+            <div class="edit-form">
+                <h3 style="margin-bottom: 20px; color: #2c3e50;">✏️ Editar Producto</h3>
+                <form id="editProductForm">
+                    <input type="hidden" id="editProductId">
+
+                    <div class="form-group">
+                        <label for="editCodigo">Código:</label>
+                        <input type="text" id="editCodigo" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editNombre">Nombre:</label>
+                        <input type="text" id="editNombre" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editDescripcion">Descripción:</label>
+                        <input type="text" id="editDescripcion">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editPrecio">Precio:</label>
+                        <input type="number" id="editPrecio" step="0.01" min="0" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editStock">Stock:</label>
+                        <input type="number" id="editStock" min="0" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editCategoria">Categoría:</label>
+                        <input type="text" id="editCategoria">
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de agregar producto -->
+        <div id="addModal" class="edit-modal">
+            <div class="edit-form">
+                <h3 style="margin-bottom: 20px; color: #2c3e50;">➕ Agregar Nuevo Producto</h3>
+                <form id="addProductForm">
+                    <div class="form-group">
+                        <label for="addCodigo">Código:</label>
+                        <input type="text" id="addCodigo" required placeholder="Ej: PROD-001">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addNombre">Nombre:</label>
+                        <input type="text" id="addNombre" required placeholder="Nombre del producto">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addDescripcion">Descripción:</label>
+                        <input type="text" id="addDescripcion" placeholder="Descripción opcional">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addPrecio">Precio:</label>
+                        <input type="number" id="addPrecio" step="0.01" min="0" required placeholder="0.00">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addStock">Stock:</label>
+                        <input type="number" id="addStock" min="0" required placeholder="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addCategoria">Categoría:</label>
+                        <input type="text" id="addCategoria" placeholder="Categoría del producto">
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Crear Producto</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de agregar proveedor -->
+        <div id="addSupplierModal" class="edit-modal">
+            <div class="edit-form">
+                <h3 style="margin-bottom: 20px; color: #2c3e50;">➕ Agregar Nuevo Proveedor</h3>
+                <form id="addSupplierForm">
+                    <div class="form-group">
+                        <label for="addNombreProveedor">Nombre del Proveedor:</label>
+                        <input type="text" id="addNombreProveedor" required placeholder="Ej: Distribuidora ABC">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addNombreContacto">Nombre de Contacto:</label>
+                        <input type="text" id="addNombreContacto" placeholder="Ej: Juan Pérez">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addTelefono">Teléfono:</label>
+                        <input type="tel" id="addTelefono" placeholder="Ej: +54 11 1234-5678">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addEmail">Email:</label>
+                        <input type="email" id="addEmail" placeholder="Ej: contacto@proveedor.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addProductosServicios">Productos/Servicios:</label>
+                        <textarea id="addProductosServicios" placeholder="Ej: Alimentos, Bebidas, Limpieza" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addCondicionesPago">Condiciones de Pago:</label>
+                        <input type="text" id="addCondicionesPago" placeholder="Ej: 30 días, Contado, etc.">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addEstatus">Estatus:</label>
+                        <select id="addEstatus">
+                            <option value="Activo">Activo</option>
+                            <option value="Inactivo">Inactivo</option>
+                            <option value="Pendiente">Pendiente</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="addNotas">Notas:</label>
+                        <textarea id="addNotas" placeholder="Información adicional" rows="3"></textarea>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddSupplierModal()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Crear Proveedor</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de editar proveedor -->
+        <div id="editSupplierModal" class="edit-modal">
+            <div class="edit-form">
+                <h3 style="margin-bottom: 20px; color: #2c3e50;">✏️ Editar Proveedor</h3>
+                <form id="editSupplierForm">
+                    <input type="hidden" id="editSupplierId">
+
+                    <div class="form-group">
+                        <label for="editNombreProveedor">Nombre del Proveedor:</label>
+                        <input type="text" id="editNombreProveedor" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editNombreContacto">Nombre de Contacto:</label>
+                        <input type="text" id="editNombreContacto">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editTelefono">Teléfono:</label>
+                        <input type="tel" id="editTelefono">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editEmail">Email:</label>
+                        <input type="email" id="editEmail">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editProductosServicios">Productos/Servicios:</label>
+                        <textarea id="editProductosServicios" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editCondicionesPago">Condiciones de Pago:</label>
+                        <input type="text" id="editCondicionesPago">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editEstatus">Estatus:</label>
+                        <select id="editEstatus">
+                            <option value="Activo">Activo</option>
+                            <option value="Inactivo">Inactivo</option>
+                            <option value="Pendiente">Pendiente</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editNotas">Notas:</label>
+                        <textarea id="editNotas" rows="3"></textarea>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditSupplierModal()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+
+        <!-- Modal de crear promoción -->
+        <div id="createPromotionModal" class="edit-modal">
+            <div class="edit-form" style="max-width: 800px; width: 90%;">
+                <h3 style="margin-bottom: 20px; color: #2c3e50;">➕ Armar Nueva Promoción</h3>
+                <form id="createPromotionForm">
+                    <div class="form-group">
+                        <label for="promotionName">Nombre de la Promoción:</label>
+                        <input type="text" id="promotionName" required placeholder="Ej: Promoción Comestibles">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Buscar Productos:</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="productSearch" placeholder="Buscar por nombre o código..." style="flex: 1;">
+                            <button type="button" onclick="searchProductsForPromotion()" class="btn btn-secondary" style="padding: 8px 16px;">Buscar</button>
+                        </div>
+                    </div>
+
+                    <div id="productSearchResults" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin: 10px 0; display: none;">
+                        <!-- Resultados de búsqueda aparecerán aquí -->
+                    </div>
+
+                    <div class="form-group">
+                        <label>Productos en la Promoción:</label>
+                        <div id="promotionProducts" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 10px;">
+                            <div style="text-align: center; color: #7f8c8d; padding: 20px;">
+                                No hay productos agregados. Busca y selecciona productos arriba.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="closeCreatePromotionModal()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Crear Promoción</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de editar descuento -->
+        <div id="editDiscountModal" class="edit-modal">
+            <div class="edit-form">
+                <h3 style="margin-bottom: 20px; color: #2c3e50;">✏️ Editar Descuento</h3>
+                <div id="discountProductInfo" style="margin-bottom: 20px;"></div>
+                <form id="editDiscountForm">
+                    <input type="hidden" id="discountProductId">
+                    <div class="form-group">
+                        <label for="discountPercentage">Descuento (%):</label>
+                        <input type="number" id="discountPercentage" min="0" max="100" step="0.1" required>
+                    </div>
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditDiscountModal()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // API_BASE ya está declarado en script.js
+        // isLoggedIn y authCredentials también están en script.js
+
+        function formatCurrency(amount) {
+            return `$${parseFloat(amount).toFixed(2).replace('.', ',')}`;
+        }
+
+        function formatPaymentMethod(metodoPago, saleData) {
+            if (Array.isArray(metodoPago) && metodoPago.length > 0) {
+                if (metodoPago[0].metodo) {
+                    // Pagos detallados con método y monto
+                    const paymentDetails = metodoPago.map(p => `${p.metodo.toUpperCase()}: ${formatCurrency(p.monto)}`).join(', ');
+                    const changeText = saleData && saleData.vuelto > 0 ? ` (Vuelto: ${formatCurrency(saleData.vuelto)})` : '';
+                    return paymentDetails + changeText;
+                } else {
+                    // Solo métodos sin montos
+                    return metodoPago.join('/');
+                }
+            } else if (typeof metodoPago === 'string') {
+                // Método simple
+                const changeText = saleData && saleData.vuelto > 0 ? ` (Vuelto: ${formatCurrency(saleData.vuelto)})` : '';
+                return metodoPago.toUpperCase() + changeText;
+            }
+            return 'No especificado';
+        }
+
+        function showAlert(message, type) {
+            let alert = document.createElement('div');
+            alert.className = `alert ${type}`;
+            alert.textContent = message;
+            document.body.appendChild(alert);
+            setTimeout(() => alert.remove(), 2000);
+        }
+
+        let globalProductosData = []; // Variable global para almacenar datos de productos
+        let currentSortMode = 1; // 0: Stock asc, 1: Stock desc, 2: ID asc
+
+        async function fetchAndDisplayData() {
+            const headers = { 'Content-Type': 'application/json' };
+            // Autenticación manejada por cookies de sesión
+
+            // Fetch de productos
+            try {
+                const productosRes = await fetch(`${API_BASE}/products`, { headers });
+                if (productosRes.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!productosRes.ok) throw new Error('Network response for products was not ok');
+                const productos = await productosRes.json();
+                globalProductosData = productos; // Almacenar datos globalmente
+                displayTableData('productos', productos);
+            } catch (error) {
+                console.error('Error fetching products:', error);
+                const productosSection = document.querySelector('#productos-section');
+                if (productosSection) {
+                    productosSection.innerHTML = '<div class="error">Error al cargar productos. Asegúrate de que el servidor esté activo y que el endpoint /api/products funcione.</div>';
+                }
+            }
+
+            // Fetch de ventas
+            try {
+                console.log('Fetching sales data...');
+                const ventasRes = await fetch(`${API_BASE}/sales`, { headers });
+                console.log('Sales response status:', ventasRes.status);
+                if (ventasRes.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!ventasRes.ok) throw new Error('Network response for sales was not ok');
+                const ventas = await ventasRes.json();
+                console.log('Sales data received:', ventas);
+                displaySalesGrouped(ventas);
+            } catch (error) {
+                console.error('Error fetching sales:', error);
+                const ventasSection = document.querySelector('#ventas-section');
+                if (ventasSection) {
+                    ventasSection.innerHTML = '<div class="error">Error al cargar ventas. Asegúrate de que el servidor esté activo y que el endpoint /api/sales funcione.</div>';
+                }
+            }
+
+            // Fetch de items de ventas
+            try {
+                const itemsVentaRes = await fetch(`${API_BASE}/items`, { headers });
+                if (itemsVentaRes.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!itemsVentaRes.ok) throw new Error('Network response for items was not ok');
+                const itemsVenta = await itemsVentaRes.json();
+                displayTableData('items-venta', itemsVenta);
+            } catch (error) {
+                console.error('Error fetching items:', error);
+                const itemsSection = document.querySelector('#items-venta-section');
+                if (itemsSection) {
+                    itemsSection.innerHTML = '<div class="error">Error al cargar items de ventas. Asegúrate de que el servidor esté activo y que el endpoint /api/items funcione.</div>';
+                }
+            }
+        }
+
+        function displayTableData(dataType, data) {
+            let container, table, tbody, loading;
+
+            if (dataType === 'productos') {
+                container = document.querySelector('#productos-section');
+                table = document.querySelector('#productos-table');
+                loading = document.querySelector('#productos-section .loading');
+            } else if (dataType === 'items-venta') {
+                container = document.querySelector('#items-venta-section');
+                table = document.querySelector('#items-venta-table');
+                loading = document.querySelector('#items-venta-section .loading');
+            }
+
+            if (!container || !table) {
+                console.warn(`Container or table not found for ${dataType}`);
+                return;
+            }
+
+            tbody = table.querySelector('tbody');
+            if (!tbody) {
+                console.warn(`Table body not found for ${dataType}`);
+                return;
+            }
+
+            if (data && data.length > 0) {
+                table.style.display = 'table';
+                if (loading) loading.style.display = 'none';
+
+                tbody.innerHTML = '';
+                data.forEach(item => {
+                    const row = document.createElement('tr');
+                    let rowContent = '';
+
+                    if (dataType === 'productos') {
+                        rowContent = `
+                            <td><input type="checkbox" class="product-checkbox" data-product-id="${item.id}"></td>
+                            <td>${item.id}</td>
+                            <td>${item.codigo}</td>
+                            <td>${item.nombre}</td>
+                            <td>${item.categoria || ''}</td>
+                            <td>${formatCurrency(item.precio)}</td>
+                            <td>${item.stock}</td>
+                            <td><button class="edit-button" onclick="editProduct(${item.id})">Editar</button></td>
+                        `;
+                        row.className = 'product-row';
+                        row.setAttribute('data-product-id', item.id);
+                    } else if (dataType === 'items-venta') {
+                        const descuentoPorcentaje = item.descuento_porcentaje || 0;
+                        const precioOriginal = item.precio_original || item.precio_unitario;
+                        let precioDisplay = formatCurrency(item.precio_unitario);
+                        if (descuentoPorcentaje > 0) {
+                            precioDisplay = `<span style="text-decoration: line-through; color: #999;">${formatCurrency(precioOriginal)}</span><br><span style="color: #e74c3c; font-weight: bold;">${formatCurrency(item.precio_unitario)} (-${descuentoPorcentaje}%)</span>`;
+                        }
+                        rowContent = `
+                            <td>${item.venta_id}</td>
+                            <td>${item.producto_id}</td>
+                            <td>${item.nombre_producto}</td>
+                            <td>${item.cantidad}</td>
+                            <td>${precioDisplay}</td>
+                            <td>${descuentoPorcentaje > 0 ? `${descuentoPorcentaje}%` : '-'}</td>
+                            <td>${formatCurrency(item.subtotal)}</td>
+                        `;
+                    }
+
+                    row.innerHTML = rowContent;
+                    tbody.appendChild(row);
+                });
+
+                // Sección actualizada correctamente
+            } else {
+                table.style.display = 'none';
+                if (loading) {
+                    loading.textContent = `No hay ${dataType === 'productos' ? 'productos' : 'detalles de ventas'} registrados.`;
+                    loading.style.display = 'block';
+                }
+
+                // Sección sin datos
+            }
+        }
+
+        // Función para alternar entre modos de ordenamiento
+        function toggleSortMode() {
+            if (globalProductosData.length === 0) {
+                alert('No hay productos para ordenar');
+                return;
+            }
+
+            // Cambiar al siguiente modo (0 -> 1 -> 2 -> 0...)
+            currentSortMode = (currentSortMode + 1) % 3;
+
+            // Aplicar el ordenamiento según el modo actual
+            applySorting();
+
+            // Actualizar el texto del botón
+            updateSortButtonText();
+        }
+
+        // Función para aplicar el ordenamiento según el modo actual
+        function applySorting() {
+            let sortedProductos = [...globalProductosData];
+
+            switch (currentSortMode) {
+                case 0: // Stock ascendente (menor a mayor)
+                    sortedProductos.sort((a, b) => a.stock - b.stock);
+                    break;
+                case 1: // Stock descendente (mayor a menor)
+                    sortedProductos.sort((a, b) => b.stock - a.stock);
+                    break;
+                case 2: // ID ascendente
+                    sortedProductos.sort((a, b) => a.id - b.id);
+                    break;
+            }
+
+            // Mostrar los datos ordenados
+            displayTableData('productos', sortedProductos);
+        }
+
+        // Función para actualizar el texto del botón según el modo actual
+        function updateSortButtonText() {
+            const sortBtn = document.getElementById('sortBtn');
+            if (!sortBtn) return;
+
+            switch (currentSortMode) {
+                case 0:
+                    sortBtn.textContent = '📊 Stock ↑';
+                    break;
+                case 1:
+                    sortBtn.textContent = '📊 Stock ↓';
+                    break;
+                case 2:
+                    sortBtn.textContent = '🆔 ID ↑';
+                    break;
+            }
+        }
+
+        // Variables para el estado de edición
+        let selectedProductId = null;
+
+        // Función para editar producto
+        async function editProduct(productId) {
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (authCredentials) {
+                    headers['Authorization'] = 'Basic ' + btoa(authCredentials.username + ':' + authCredentials.password);
+                }
+                // Obtener datos del producto
+                const response = await fetch(`${API_BASE}/products/${productId}`, { headers });
+                if (response.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!response.ok) throw new Error('Error al obtener producto');
+
+                const product = await response.json();
+
+                // Llenar el formulario con los datos actuales
+                document.getElementById('editProductId').value = product.id;
+                document.getElementById('editCodigo').value = product.codigo;
+                document.getElementById('editNombre').value = product.nombre;
+                document.getElementById('editDescripcion').value = product.descripcion || '';
+                document.getElementById('editPrecio').value = product.precio;
+                document.getElementById('editStock').value = product.stock;
+                document.getElementById('editCategoria').value = product.categoria || '';
+
+                // Mostrar el modal
+                document.getElementById('editModal').classList.add('show');
+
+            } catch (error) {
+                console.error('Error al cargar producto para editar:', error);
+                alert('Error al cargar el producto para editar');
+            }
+        }
+
+        // Función para cerrar el modal de edición
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('show');
+            document.getElementById('editProductForm').reset();
+            selectedProductId = null;
+        }
+
+        // Función para guardar cambios del producto
+        async function saveProductChanges(event) {
+            event.preventDefault();
+
+            const productId = document.getElementById('editProductId').value;
+            const formData = {
+                codigo: document.getElementById('editCodigo').value.trim(),
+                nombre: document.getElementById('editNombre').value.trim(),
+                descripcion: document.getElementById('editDescripcion').value.trim(),
+                precio: parseFloat(document.getElementById('editPrecio').value),
+                stock: parseInt(document.getElementById('editStock').value),
+                categoria: document.getElementById('editCategoria').value.trim()
+            };
+
+            // Validaciones básicas
+            if (!formData.codigo || !formData.nombre || isNaN(formData.precio) || isNaN(formData.stock)) {
+                alert('Por favor complete todos los campos requeridos correctamente');
+                return;
+            }
+
+            if (formData.precio < 0 || formData.stock < 0) {
+                alert('El precio y stock no pueden ser negativos');
+                return;
+            }
+
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (authCredentials) {
+                    headers['Authorization'] = 'Basic ' + btoa(authCredentials.username + ':' + authCredentials.password);
+                }
+                const response = await fetch(`${API_BASE}/products/${productId}`, {
+                    method: 'PUT',
+                    headers: headers,
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Error al actualizar producto');
+                }
+
+                const result = await response.json();
+
+                // Cerrar modal
+                closeEditModal();
+
+                // Mostrar mensaje de éxito
+                alert('Producto actualizado exitosamente');
+
+                // Recargar los datos
+                await fetchAndDisplayData();
+
+            } catch (error) {
+                console.error('Error al guardar cambios:', error);
+                alert('Error al guardar cambios: ' + error.message);
+            }
+        }
+
+        // Función para abrir modal de agregar producto
+        function openAddProductModal() {
+            document.getElementById('addProductForm').reset();
+            document.getElementById('addModal').classList.add('show');
+        }
+
+        // Función para cerrar modal de agregar producto
+        function closeAddModal() {
+            document.getElementById('addModal').classList.remove('show');
+            document.getElementById('addProductForm').reset();
+        }
+
+        // Función para crear nuevo producto
+        async function createProduct(event) {
+            event.preventDefault();
+
+            const formData = {
+                codigo: document.getElementById('addCodigo').value.trim(),
+                nombre: document.getElementById('addNombre').value.trim(),
+                descripcion: document.getElementById('addDescripcion').value.trim(),
+                precio: parseFloat(document.getElementById('addPrecio').value),
+                stock: parseInt(document.getElementById('addStock').value),
+                categoria: document.getElementById('addCategoria').value.trim()
+            };
+
+            // Validaciones básicas
+            if (!formData.codigo || !formData.nombre || isNaN(formData.precio) || isNaN(formData.stock)) {
+                alert('Por favor complete todos los campos requeridos correctamente');
+                return;
+            }
+
+            if (formData.precio < 0 || formData.stock < 0) {
+                alert('El precio y stock no pueden ser negativos');
+                return;
+            }
+
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (authCredentials) {
+                    headers['Authorization'] = 'Basic ' + btoa(authCredentials.username + ':' + authCredentials.password);
+                }
+                const response = await fetch(`${API_BASE}/products`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    throw new Error('Autenticación requerida');
+                }
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Error al crear producto');
+                }
+
+                const result = await response.json();
+
+                // Cerrar modal
+                closeAddModal();
+
+                // Mostrar mensaje de éxito
+                alert('Producto creado exitosamente');
+
+                // Recargar los datos
+                await fetchAndDisplayData();
+
+            } catch (error) {
+                console.error('Error al crear producto:', error);
+                alert('Error al crear producto: ' + error.message);
+            }
+        }
+
+        // Event listeners para el formulario de edición
+        document.getElementById('editProductForm').addEventListener('submit', saveProductChanges);
+
+        // Event listeners para el formulario de agregar producto
+        document.getElementById('addProductForm').addEventListener('submit', createProduct);
+
+        // Event listeners para promociones
+        document.getElementById('createPromotionForm').addEventListener('submit', createPromotion);
+
+        // Cerrar modales al hacer clic fuera
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEditModal();
+            }
+        });
+
+        document.getElementById('addModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddModal();
+            }
+        });
+
+        // Event listeners para secciones colapsables
+        document.querySelectorAll('.section-header').forEach(header => {
+            header.addEventListener('click', function() {
+                const section = this.closest('.dashboard-section');
+                section.classList.toggle('collapsed');
+                const icon = this.querySelector('.section-icon');
+                if (section.classList.contains('collapsed')) {
+                    icon.textContent = '▶';
+                } else {
+                    icon.textContent = '▼';
+                }
+            });
+        });
+
+        // Función para actualizar el estado del botón editar
+        function updateEditButton() {
+            const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+            const editBtn = document.getElementById('editSelectedBtn');
+            editBtn.disabled = checkedBoxes.length === 0;
+            if (checkedBoxes.length > 0) {
+                editBtn.classList.remove('btn-secondary');
+                editBtn.classList.add('btn-primary');
+            } else {
+                editBtn.classList.remove('btn-primary');
+                editBtn.classList.add('btn-secondary');
+            }
+        }
+
+        // Event listeners para checkboxes de productos
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('product-checkbox')) {
+                // Para selección única, desmarcar otros
+                if (e.target.checked) {
+                    document.querySelectorAll('.product-checkbox').forEach(cb => {
+                        if (cb !== e.target) cb.checked = false;
+                    });
+                }
+                updateEditButton();
+            }
+        });
+
+        // Event listener para el botón editar
+        document.getElementById('editSelectedBtn').addEventListener('click', function() {
+            const checkedBox = document.querySelector('.product-checkbox:checked');
+            if (checkedBox) {
+                const productId = checkedBox.getAttribute('data-product-id');
+                editProduct(productId);
+            }
+        });
+
+        // Función especial para mostrar ventas agrupadas por factura
+        function displaySalesGrouped(sales) {
+            console.log('displaySalesGrouped called with:', sales);
+
+            // Buscar el contenedor en la sección de ventas
+            const container = document.querySelector('#ventas-container');
+            const section = document.querySelector('#ventas-section');
+            const loading = section ? section.querySelector('.loading') : null;
+
+            console.log('Container found:', !!container);
+            console.log('Section found:', !!section);
+            console.log('Loading found:', !!loading);
+
+            if (!container) {
+                console.error('Ventas container not found!');
+                return;
+            }
+
+            if (sales && sales.length > 0) {
+                console.log('Displaying', sales.length, 'sales');
+
+                // Asegurar que el contenedor sea visible
+                container.style.display = 'block';
+
+                // Ocultar loading si existe
+                if (loading) {
+                    loading.style.display = 'none';
+                    console.log('Loading hidden');
+                }
+
+
+                // Generar HTML para las ventas
+                const salesHTML = sales.map(sale => `
+                    <div class="invoice-card collapsed" style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; background: #fafafa;">
+                        <div class="invoice-header" style="border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 15px; position: relative;">
+                            <span class="collapse-icon" onclick="toggleInvoice(this)" title="Expandir/Contraer" style="cursor: pointer; font-size: 18px; color: #666;">▶</span>
+                            <h3 style="margin: 0; color: #2c3e50;">Factura: ${sale.numero_factura}</h3>
+                            <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                                <span><strong>Fecha:</strong> ${new Date(sale.fecha).toLocaleString('es-AR', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit',
+                                    hour12: false
+                                })}</span>
+                                <span><strong>Pago:</strong> ${formatPaymentMethod(sale.metodo_pago, sale)}</span>
+                                <span style="color: #27ae60; font-weight: bold;">Total: ${formatCurrency(sale.total)}</span>
+                            </div>
+                        </div>
+
+                        <div class="invoice-items" style="margin-bottom: 15px;">
+                            <h4 style="margin: 5px 0; color: #34495e;">Productos:</h4>
+                            ${sale.items && sale.items.length > 0 ? sale.items.map(item => {
+                                const descuentoPorcentaje = item.descuento_porcentaje || 0;
+                                const descuentoAplicado = item.descuento_aplicado || 0;
+                                const precioUnitario = item.precio_unitario || 0;
+                                const cantidad = item.cantidad || 0;
+                                const subtotal = item.subtotal || 0;
+
+                                let precioDisplay = `${formatCurrency(precioUnitario)}`;
+                                if (descuentoPorcentaje > 0) {
+                                    const precioOriginal = precioUnitario / (1 - descuentoPorcentaje / 100);
+                                    precioDisplay = `<span style="text-decoration: line-through; color: #999;">${formatCurrency(precioOriginal)}</span> <span style="color: #e74c3c; font-weight: bold;">${formatCurrency(precioUnitario)} (-${descuentoPorcentaje}%)</span>`;
+                                }
+
+                                return `
+                                <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee;">
+                                    <span>${item.nombre || 'Producto desconocido'}</span>
+                                    <span>${cantidad} × ${precioDisplay} = ${formatCurrency(subtotal)}</span>
+                                </div>
+                                `;
+                            }).join('') : '<div style="padding: 10px; color: #666;">No hay productos en esta venta</div>'}
+                        </div>
+
+                        <div class="invoice-total" style="text-align: right; font-size: 18px; font-weight: bold; color: #27ae60; border-top: 2px solid #bdc3c7; padding-top: 10px;">
+                            Total: ${formatCurrency(sale.total || 0)}
+                        </div>
+                    </div>
+                `).join('');
+
+                console.log('Generated HTML length:', salesHTML.length);
+                console.log('Generated HTML preview:', salesHTML.substring(0, 200) + '...');
+                container.innerHTML = salesHTML;
+                console.log('HTML set to container');
+
+            } else {
+                console.log('No sales to display');
+                container.style.display = 'none';
+                if (loading) {
+                    loading.textContent = 'No hay ventas registradas.';
+                    loading.style.display = 'block';
+                }
+
+            }
+        }
+
+
+        // Función para expandir/contraer facturas
+        function toggleInvoice(iconElement) {
+            const invoiceCard = iconElement.closest('.invoice-card');
+            invoiceCard.classList.toggle('collapsed');
+
+            // Cambiar el icono
+            if (invoiceCard.classList.contains('collapsed')) {
+                iconElement.textContent = '▶';
+            } else {
+                iconElement.textContent = '▼';
+            }
+        }
+
+
+        // Funciones de autenticación
+        function login() {
+            const username = prompt('Usuario:');
+            const password = prompt('Contraseña:');
+
+            if (username && password) {
+                authCredentials = { username, password };
+                isLoggedIn = true;
+                sessionStorage.setItem('authCredentials', JSON.stringify(authCredentials));
+                updateUIBasedOnAuth();
+                alert('✅ Sesión iniciada correctamente');
+                fetchAndDisplayData(); // Recargar datos después del login
+            }
+        }
+
+        function logout() {
+            authCredentials = null;
+            isLoggedIn = false;
+            sessionStorage.removeItem('authCredentials');
+            updateUIBasedOnAuth();
+            alert('👋 Sesión cerrada');
+            // Redirigir al inicio si se cierra sesión desde dashboard
+            window.location.href = 'index.html';
+        }
+
+        function updateUIBasedOnAuth() {
+            const loginBtn = document.getElementById('loginBtn');
+            if (loginBtn) {
+                loginBtn.textContent = isLoggedIn ? 'Cerrar Sesión' : 'Iniciar Sesión';
+                loginBtn.onclick = isLoggedIn ? logout : login;
+            }
+        }
+
+        // Verificar autenticación al cargar dashboard
+        function checkDashboardAccess() {
+            if (!isLoggedIn) {
+                alert('Debes iniciar sesión para acceder al Panel de Control');
+                window.location.href = 'index.html';
+                return false;
+            }
+            return true;
+        }
+
+        // Función para generar PDF y preparar envío por Gmail
+        async function sendSalesReport() {
+            const email = prompt('Ingrese el email donde enviar el reporte:');
+            if (!email) return;
+
+            // Validar formato de email básico
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                alert('❌ Por favor ingrese un email válido');
+                return;
+            }
+
+            const dateFrom = prompt('Fecha desde (YYYY-MM-DD) - opcional:', '');
+            const dateTo = prompt('Fecha hasta (YYYY-MM-DD) - opcional:', '');
+
+            try {
+                const response = await fetch(`${API_BASE}/generate-pdf-report`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        dateFrom: dateFrom || undefined,
+                        dateTo: dateTo || undefined
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+
+                    // Preparar contenido del email
+                    const subject = encodeURIComponent(`Reporte POS - ${new Date().toLocaleDateString('es-AR')}`);
+                    const body = encodeURIComponent(`Adjunto el reporte PDF con la lista de facturas y cierres de caja del período ${dateFrom || 'Inicio'} - ${dateTo || 'Hoy'}.
+
+📎 Descarga el PDF desde: ${result.pdfUrl}
+
+Sistema POS - Reporte generado automáticamente`);
+
+                    // Abrir Gmail con el email preparado
+                    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
+
+                    alert(`✅ PDF generado exitosamente!\n\n📄 Descarga el PDF desde: ${result.pdfUrl}\n\n📧 Se abrirá Gmail para que completes el envío.`);
+
+                    // Abrir Gmail en nueva ventana
+                    window.open(gmailUrl, '_blank');
+
+                    // También abrir el PDF en una nueva pestaña para descarga fácil
+                    setTimeout(() => {
+                        window.open(result.pdfUrl, '_blank');
+                    }, 1000);
+
+                } else {
+                    const error = await response.json();
+                    alert('❌ Error al generar el PDF: ' + (error.error || 'Error desconocido'));
+                }
+            } catch (error) {
+                console.error('Error generando PDF:', error);
+                alert('❌ Error de conexión al generar el PDF');
+            }
+        }
+
+        // Cargar credenciales al iniciar
+        function loadAuthFromStorage() {
+            const stored = sessionStorage.getItem('authCredentials');
+            if (stored) {
+                authCredentials = JSON.parse(stored);
+                isLoggedIn = true;
+            }
+            updateUIBasedOnAuth();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAuthFromStorage();
+            if (checkDashboardAccess()) {
+                fetchAndDisplayData().then(() => {
+                    // Inicializar el texto del botón de ordenamiento
+                    updateSortButtonText();
+                });
+            }
+        });
+
+        // Funciones de promociones
+        let currentPromotionProducts = [];
+
+        async function loadPromotions() {
+            const container = document.getElementById('promociones-container');
+            const loading = document.querySelector('#promociones-section .loading');
+
+            try {
+                const res = await fetch(`${API_BASE}/promotions`, {
+                    credentials: 'include'
+                });
+
+                if (res.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    loading.textContent = 'Autenticación requerida';
+                    return;
+                }
+
+                const promotions = await res.json();
+                displayPromotions(promotions);
+
+            } catch (error) {
+                console.error('Error loading promotions:', error);
+                loading.textContent = 'Error al cargar promociones';
+            }
+        }
+
+        function displayPromotions(promotions) {
+            const container = document.getElementById('promociones-container');
+            const loading = document.querySelector('#promociones-section .loading');
+
+            if (promotions.length === 0) {
+                loading.textContent = 'No hay promociones creadas.';
+                container.style.display = 'none';
+                loading.style.display = 'block';
+                return;
+            }
+
+            container.innerHTML = promotions.map(promo => `
+                <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: #f9f9f9;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="margin: 0; color: #2c3e50;">${promo.nombre}</h3>
+                        <div>
+                            <button class="btn btn-secondary" onclick="editPromotion(${promo.id})" style="font-size: 12px; padding: 6px 12px;">✏️ Editar</button>
+                            <button class="btn btn-secondary" onclick="deletePromotion(${promo.id})" style="font-size: 12px; padding: 6px 12px; background: #dc3545;">🗑️ Eliminar</button>
+                        </div>
+                    </div>
+                    <div>
+                        ${promo.productos && promo.productos.length > 0 ? `
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                                <thead>
+                                    <tr style="background: #f8f9fa;">
+                                        <th style="padding: 8px; text-align: left; border: 1px solid #ddd; font-weight: bold;">Producto</th>
+                                        <th style="padding: 8px; text-align: left; border: 1px solid #ddd; font-weight: bold;">Código</th>
+                                        <th style="padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;">Precio</th>
+                                        <th style="padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;">Descuento</th>
+                                        <th style="padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;">%</th>
+                                        <th style="padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${promo.productos.map(producto => `
+                                        <tr>
+                                            <td style="padding: 8px; border: 1px solid #ddd;">${producto.nombre}</td>
+                                            <td style="padding: 8px; border: 1px solid #ddd;">${producto.codigo}</td>
+                                            <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${formatCurrency(producto.precio_original || producto.precio)}</td>
+                                            <td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: #27ae60; font-weight: bold;">${formatCurrency(producto.precio_con_descuento || producto.precio)}</td>
+                                            <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; color: #e74c3c;">${producto.descuento_porcentaje}%</td>
+                                            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
+                                                <button class="btn btn-secondary" onclick="editPromotion(${promo.id})" style="font-size: 11px; padding: 4px 8px;">✏️ Editar</button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        ` : '<div style="padding: 10px; color: #666;">No hay productos en esta promoción</div>'}
+                    </div>
+                </div>
+            `).join('');
+
+            container.style.display = 'block';
+            loading.style.display = 'none';
+        }
+
+        function openCreatePromotionModal() {
+            currentPromotionProducts = [];
+            document.getElementById('promotionName').value = '';
+            document.getElementById('productSearch').value = '';
+            document.getElementById('productSearchResults').style.display = 'none';
+            updatePromotionProductsDisplay();
+            document.getElementById('createPromotionModal').classList.add('show');
+        }
+
+        function closeCreatePromotionModal() {
+            document.getElementById('createPromotionModal').classList.remove('show');
+
+            // Resetear el formulario y el botón
+            const form = document.getElementById('createPromotionForm');
+            form.reset();
+            form.onsubmit = createPromotion;
+
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.textContent = 'Crear Promoción';
+            }
+        }
+
+        async function searchProductsForPromotion() {
+            const searchTerm = document.getElementById('productSearch').value.trim();
+            if (!searchTerm) {
+                showAlert('Ingresa un término de búsqueda', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/products/search?q=${encodeURIComponent(searchTerm)}`, {
+                    credentials: 'include'
+                });
+
+                if (res.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    return;
+                }
+
+                const products = await res.json();
+                displayProductSearchResults(products);
+
+            } catch (error) {
+                console.error('Error searching products:', error);
+                showAlert('Error al buscar productos', 'error');
+            }
+        }
+
+        function displayProductSearchResults(products) {
+            const resultsDiv = document.getElementById('productSearchResults');
+
+            if (products.length === 0) {
+                resultsDiv.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No se encontraron productos</div>';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            resultsDiv.innerHTML = products.map(product => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee;">
+                    <div>
+                        <strong>${product.nombre}</strong> (${product.codigo})<br>
+                        <small>Precio: ${formatCurrency(product.precio)} | Stock: ${product.stock}</small>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="addProductToPromotion(${product.id}, '${product.nombre.replace(/'/g, "\\'")}', '${product.codigo}', ${product.precio})" style="font-size: 12px; padding: 6px 12px;">
+                        ➕ Agregar
+                    </button>
+                </div>
+            `).join('');
+
+            resultsDiv.style.display = 'block';
+        }
+
+        function addProductToPromotion(productId, nombre, codigo, precio) {
+            // Verificar si ya está en la lista
+            if (currentPromotionProducts.some(p => p.producto_id === productId)) {
+                showAlert('Este producto ya está en la promoción', 'error');
+                return;
+            }
+
+            currentPromotionProducts.push({
+                producto_id: productId,
+                nombre: nombre,
+                codigo: codigo,
+                precio: precio,
+                descuento_porcentaje: 0
+            });
+
+            updatePromotionProductsDisplay();
+            showAlert('Producto agregado a la promoción', 'success');
+        }
+
+        function updatePromotionProductsDisplay() {
+            const container = document.getElementById('promotionProducts');
+
+            if (currentPromotionProducts.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #7f8c8d; padding: 20px;">No hay productos agregados. Busca y selecciona productos arriba.</div>';
+                return;
+            }
+
+            container.innerHTML = currentPromotionProducts.map((product, index) => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee;">
+                    <div>
+                        <strong>${product.nombre}</strong> (${product.codigo})<br>
+                        <small>Precio: ${formatCurrency(product.precio)}</small>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-weight: bold; color: #e74c3c;">${product.descuento_porcentaje}%</span>
+                        <button type="button" class="btn btn-secondary" onclick="editProductDiscount(${index})" style="font-size: 12px; padding: 4px 8px;">✏️</button>
+                        <button type="button" class="btn btn-secondary" onclick="removeProductFromPromotion(${index})" style="font-size: 12px; padding: 4px 8px; background: #dc3545;">❌</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function editProductDiscount(index) {
+            const product = currentPromotionProducts[index];
+            document.getElementById('discountProductId').value = index;
+            document.getElementById('discountProductInfo').innerHTML = `
+                <strong>${product.nombre}</strong> (${product.codigo})<br>
+                Precio original: ${formatCurrency(product.precio)}
+            `;
+            document.getElementById('discountPercentage').value = product.descuento_porcentaje;
+            document.getElementById('editDiscountModal').classList.add('show');
+        }
+
+        function closeEditDiscountModal() {
+            document.getElementById('editDiscountModal').classList.remove('show');
+        }
+
+        function removeProductFromPromotion(index) {
+            currentPromotionProducts.splice(index, 1);
+            updatePromotionProductsDisplay();
+        }
+
+        async function createPromotion(event) {
+            event.preventDefault();
+
+            const nombre = document.getElementById('promotionName').value.trim();
+            if (!nombre) {
+                showAlert('Ingresa un nombre para la promoción', 'error');
+                return;
+            }
+
+            if (currentPromotionProducts.length === 0) {
+                showAlert('Agrega al menos un producto a la promoción', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/promotions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        nombre: nombre,
+                        productos: currentPromotionProducts
+                    })
+                });
+
+                if (res.status === 401) {
+                    isLoggedIn = false;
+                    updateUIBasedOnAuth();
+                    return;
+                }
+
+                if (!res.ok) throw new Error('Error al crear promoción');
+
+                const result = await res.json();
+                showAlert('Promoción creada exitosamente', 'success');
+                closeCreatePromotionModal();
+                loadPromotions();
+
+            } catch (error) {
+                console.error('Error creating promotion:', error);
+                showAlert('Error al crear promoción', 'error');
+            }
+        }
+
+        async function editPromotion(promotionId) {
+            // Para simplificar, reabrir el modal de creación con los datos existentes
+            try {
+                const res = await fetch(`${API_BASE}/promotions`, { credentials: 'include' });
+                const promotions = await res.json();
+                const promotion = promotions.find(p => p.id === promotionId);
+
+                if (promotion) {
+                    currentPromotionProducts = promotion.productos || [];
+                    document.getElementById('promotionName').value = promotion.nombre;
+                    updatePromotionProductsDisplay();
+                    document.getElementById('createPromotionModal').classList.add('show');
+
+                    // Cambiar el comportamiento del formulario para editar
+                    const form = document.getElementById('createPromotionForm');
+                    form.onsubmit = (e) => updatePromotion(e, promotionId);
+
+                    // Cambiar el texto del botón
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.textContent = 'Aplicar Cambios';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading promotion for edit:', error);
+                showAlert('Error al cargar promoción', 'error');
+            }
+        }
+
+        async function updatePromotion(event, promotionId) {
+            event.preventDefault();
+
+            const nombre = document.getElementById('promotionName').value.trim();
+            if (!nombre) {
+                showAlert('Ingresa un nombre para la promoción', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/promotions/${promotionId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        nombre: nombre,
+                        productos: currentPromotionProducts
+                    })
+                });
+
+                if (!res.ok) throw new Error('Error al actualizar promoción');
+
+                showAlert('Promoción actualizada exitosamente', 'success');
+                closeCreatePromotionModal();
+                loadPromotions();
+
+            } catch (error) {
+                console.error('Error updating promotion:', error);
+                showAlert('Error al actualizar promoción', 'error');
+            }
+        }
+
+        async function deletePromotion(promotionId) {
+            if (!confirm('¿Estás seguro de que quieres eliminar esta promoción?')) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/promotions/${promotionId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                if (!res.ok) throw new Error('Error al eliminar promoción');
+
+                showAlert('Promoción eliminada exitosamente', 'success');
+                loadPromotions();
+
+            } catch (error) {
+                console.error('Error deleting promotion:', error);
+                showAlert('Error al eliminar promoción', 'error');
+            }
+        }
+
+        // Event listeners para promociones
+        document.getElementById('editDiscountForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const index = document.getElementById('discountProductId').value;
+            const discount = parseFloat(document.getElementById('discountPercentage').value);
+
+            if (isNaN(discount) || discount < 0 || discount > 100) {
+                showAlert('El descuento debe estar entre 0 y 100', 'error');
+                return;
+            }
+
+            currentPromotionProducts[index].descuento_porcentaje = discount;
+            updatePromotionProductsDisplay();
+            closeEditDiscountModal();
+        });
+
+        // Cargar promociones cuando se expande la sección
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.section-header') && e.target.closest('#promociones-section')) {
+                const section = document.getElementById('promociones-section');
+                setTimeout(() => {
+                    if (!section.classList.contains('collapsed')) {
+                        loadPromotions();
+                    }
+                }, 300);
+            }
+        });
+
+        // Exponer funciones de promociones globalmente
+        window.openCreatePromotionModal = openCreatePromotionModal;
+        window.closeCreatePromotionModal = closeCreatePromotionModal;
+        window.searchProductsForPromotion = searchProductsForPromotion;
+        window.addProductToPromotion = addProductToPromotion;
+        window.editProductDiscount = editProductDiscount;
+        window.closeEditDiscountModal = closeEditDiscountModal;
+        window.removeProductFromPromotion = removeProductFromPromotion;
+        window.createPromotion = createPromotion;
+        window.editPromotion = editPromotion;
+        window.deletePromotion = deletePromotion;
+    </script>
+</body>
+</html>
