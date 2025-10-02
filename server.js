@@ -101,23 +101,52 @@ let pool;
 async function initDatabaseConnection() {
     try {
         console.log('🔄 Inicializando conexión a PostgreSQL...');
-        console.log('DATABASE_URL presente:', !!process.env.DATABASE_URL);
-        console.log('DATABASE_URL value:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
-        console.log('NODE_ENV:', process.env.NODE_ENV);
 
-        if (!process.env.DATABASE_URL) {
-            console.error('❌ DATABASE_URL no configurada. Asegúrate de agregar PostgreSQL en Railway.');
-            console.error('Variables de entorno disponibles:', Object.keys(process.env).filter(key => key.includes('DATABASE') || key.includes('POSTGRES')));
+        // Verificar todas las variables de PostgreSQL disponibles
+        const pgVars = {
+            DATABASE_URL: process.env.DATABASE_URL,
+            PGHOST: process.env.PGHOST,
+            PGPORT: process.env.PGPORT,
+            PGUSER: process.env.PGUSER,
+            PGPASSWORD: process.env.PGPASSWORD,
+            PGDATABASE: process.env.PGDATABASE,
+            POSTGRES_USER: process.env.POSTGRES_USER,
+            POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD,
+            POSTGRES_DB: process.env.POSTGRES_DB
+        };
+
+        console.log('🔍 Variables PostgreSQL disponibles:');
+        Object.entries(pgVars).forEach(([key, value]) => {
+            console.log(`  ${key}: ${value ? (key.includes('PASSWORD') ? '[SET]' : value) : 'NOT SET'}`);
+        });
+
+        let connectionString;
+
+        // Intentar usar DATABASE_URL si está resuelta completamente
+        if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('${{')) {
+            connectionString = process.env.DATABASE_URL;
+            console.log('✅ Usando DATABASE_URL resuelta');
+        }
+        // Construir connection string manualmente si DATABASE_URL tiene templates
+        else if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD && process.env.PGDATABASE) {
+            connectionString = `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT || 5432}/${process.env.PGDATABASE}`;
+            console.log('🔧 Construyendo connection string manualmente');
+        }
+        else {
+            console.error('❌ No se puede construir connection string. Variables faltantes:');
+            console.error('Variables requeridas: PGHOST, PGUSER, PGPASSWORD, PGDATABASE');
             process.exit(1);
         }
 
-        // Conectar a PostgreSQL usando DATABASE_URL de Railway
+        console.log('🔗 Connection string construida');
+
+        // Conectar a PostgreSQL
         pool = new Pool({
-            connectionString: process.env.DATABASE_URL,
+            connectionString: connectionString,
             ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-            max: 5, // Reducido para Railway
+            max: 5,
             idleTimeoutMillis: 30000,
-            connectionTimeoutMillis: 20000, // Aumentado
+            connectionTimeoutMillis: 20000,
         });
 
         console.log('🔄 Intentando conectar a PostgreSQL...');
