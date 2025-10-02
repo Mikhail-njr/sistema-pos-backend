@@ -102,9 +102,12 @@ async function initDatabaseConnection() {
     try {
         console.log('🔄 Inicializando conexión a PostgreSQL...');
         console.log('DATABASE_URL presente:', !!process.env.DATABASE_URL);
+        console.log('DATABASE_URL value:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
+        console.log('NODE_ENV:', process.env.NODE_ENV);
 
         if (!process.env.DATABASE_URL) {
             console.error('❌ DATABASE_URL no configurada. Asegúrate de agregar PostgreSQL en Railway.');
+            console.error('Variables de entorno disponibles:', Object.keys(process.env).filter(key => key.includes('DATABASE') || key.includes('POSTGRES')));
             process.exit(1);
         }
 
@@ -112,14 +115,16 @@ async function initDatabaseConnection() {
         pool = new Pool({
             connectionString: process.env.DATABASE_URL,
             ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-            max: 20,
+            max: 5, // Reducido para Railway
             idleTimeoutMillis: 30000,
-            connectionTimeoutMillis: 10000,
+            connectionTimeoutMillis: 20000, // Aumentado
         });
+
+        console.log('🔄 Intentando conectar a PostgreSQL...');
 
         // Verificar conexión
         const client = await pool.connect();
-        console.log('✅ Conectado a PostgreSQL');
+        console.log('✅ Conectado a PostgreSQL exitosamente');
         client.release();
 
         // Inicializar base de datos
@@ -127,7 +132,8 @@ async function initDatabaseConnection() {
 
     } catch (error) {
         console.error('❌ Error conectando a PostgreSQL:', error.message);
-        console.error('Stack trace:', error.stack);
+        console.error('❌ Stack trace:', error.stack);
+        console.error('❌ DATABASE_URL:', process.env.DATABASE_URL);
         process.exit(1);
     }
 }
