@@ -11,7 +11,7 @@ let selectedProduct = null;
 let selectedPaymentMethod = null;
 let isLoggedIn = false;
 let authCredentials = null;
-const API_BASE = 'https://us-central1-punto-de-venta-web-f47e8.cloudfunctions.net/api';
+const API_BASE = 'https://sistema-pos-backend-production.up.railway.app/api';
 
 // Funciones de autenticación
 async function login() {

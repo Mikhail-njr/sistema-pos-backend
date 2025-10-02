@@ -107,14 +107,11 @@ function dbRun(query, params = []) {
 
 function insertSampleData() {
     const productos = [
-        ['LAP-001', 'Laptop HP 15.6"', 'Laptop HP con pantalla 15.6 pulgadas', 899.99, 25, 'Tecnología'],
-        ['MON-001', 'Monitor Samsung 24"', 'Monitor Samsung 24 pulgadas Full HD', 249.99, 15, 'Tecnología'],
-        ['TEC-001', 'Teclado Mecánico RGB', 'Teclado mecánico con iluminación RGB', 89.99, 30, 'Periféricos'],
-        ['MOU-001', 'Mouse Inalámbrico', 'Mouse inalámbrico ergonómico', 39.99, 45, 'Periféricos'],
-        ['AUD-001', 'Audífonos Bluetooth', 'Audífonos inalámbricos con cancelación de ruido', 79.99, 20, 'Audio'],
-        ['CAM-001', 'Cámara Web HD', 'Cámara web 1080p para streaming', 59.99, 18, 'Video'],
-        ['DIS-001', 'Disco Duro 1TB', 'Disco duro interno 1TB 7200RPM', 69.99, 12, 'Almacenamiento'],
-        ['MEM-001', 'Memoria RAM 8GB', 'Memoria RAM DDR4 8GB 2666MHz', 49.99, 8, 'Componentes']
+        ['LAP-001', 'Laptop HP 15.6"', 'Laptop HP con pantalla 15.6 pulgadas', 899.99, 5, 'Tecnología'],
+        ['MON-001', 'Monitor Samsung 24"', 'Monitor Samsung 24 pulgadas Full HD', 249.99, 3, 'Tecnología'],
+        ['TEC-001', 'Teclado Mecánico RGB', 'Teclado mecánico con iluminación RGB', 89.99, 8, 'Periféricos'],
+        ['MOU-001', 'Mouse Inalámbrico', 'Mouse inalámbrico ergonómico', 39.99, 10, 'Periféricos'],
+        ['AUD-001', 'Audífonos Bluetooth', 'Audífonos inalámbricos con cancelación de ruido', 79.99, 5, 'Audio']
     ];
 
     productos.forEach(producto => {
