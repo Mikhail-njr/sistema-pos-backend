@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const initSqlJs = require('sql.js');
+const { Pool } = require('pg');
 const basicAuth = require('express-basic-auth');
 const session = require('express-session');
 const { exec } = require('child_process');
@@ -95,53 +95,39 @@ app.use('/api/categories', protectWriteOperations);
 // Servir archivos frontend desde carpeta ../Frontend (AGREGADO)
 app.use(express.static(path.join(__dirname, '../Frontend'), { maxAge: 0 }));
 
-// Configuración de SQLite con sql.js
-const dbPath = path.join(__dirname, 'pos_database.sqlite');
-let db;
-let SQL;
+// Configuración de PostgreSQL
+let pool;
 
 async function initDatabaseConnection() {
     try {
-        console.log('🔄 Inicializando base de datos...');
+        console.log('🔄 Inicializando conexión a PostgreSQL...');
 
-        // Inicializar sql.js
-        SQL = await initSqlJs();
+        // Conectar a PostgreSQL usando DATABASE_URL de Railway
+        pool = new Pool({
+            connectionString: process.env.DATABASE_URL,
+            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+            max: 20,
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 2000,
+        });
 
-        // Intentar cargar base de datos existente
-        let filebuffer = null;
-        if (fs.existsSync(dbPath)) {
-            filebuffer = fs.readFileSync(dbPath);
-        }
+        // Verificar conexión
+        const client = await pool.connect();
+        console.log('✅ Conectado a PostgreSQL');
+        client.release();
 
-        // Crear base de datos
-        db = filebuffer ? new SQL.Database(filebuffer) : new SQL.Database();
-
-        console.log('✅ Conectado a base de datos SQLite');
-        initDatabase();
-
-        // Configurar guardado automático cada 30 segundos
-        setInterval(saveDatabase, 30000);
+        // Inicializar base de datos
+        await initDatabase();
 
     } catch (error) {
-        console.error('❌ Error inicializando base de datos:', error);
+        console.error('❌ Error conectando a PostgreSQL:', error);
         console.error('Stack trace:', error.stack);
         process.exit(1);
     }
 }
 
-function saveDatabase() {
-    try {
-        const data = db.export();
-        const buffer = Buffer.from(data);
-        fs.writeFileSync(dbPath, buffer);
-        console.log('💾 Base de datos guardada automáticamente');
-    } catch (error) {
-        console.error('❌ Error guardando base de datos:', error);
-    }
-}
-
-function startServer() {
-    initDatabaseConnection();
+async function startServer() {
+    await initDatabaseConnection();
 
     // Iniciar servidor
     app.listen(PORT, () => {
@@ -150,7 +136,7 @@ function startServer() {
         console.log(`📦 API disponible en http://localhost:${PORT}/api/products`);
         console.log(`📊 Estadísticas: http://localhost:${PORT}/api/stats`);
         console.log(`🔧 Diagnóstico: http://localhost:${PORT}/api/diagnostic`);
-        console.log(`💾 Base de datos: ${dbPath}`);
+        console.log(`🐘 Base de datos: PostgreSQL`);
         console.log(`🌐 Frontend disponible en http://localhost:${PORT}`);
 
         // Limpiar archivos temporales antiguos al iniciar
@@ -159,61 +145,60 @@ function startServer() {
     });
 }
 
-startServer();
+startServer().catch(console.error);
 
 // Inicializar la base de datos
-function initDatabase() {
+async function initDatabase() {
+    const client = await pool.connect();
     try {
         // Tabla productos
-        db.run(`CREATE TABLE IF NOT EXISTS productos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        await client.query(`CREATE TABLE IF NOT EXISTS productos (
+            id SERIAL PRIMARY KEY,
             codigo TEXT UNIQUE NOT NULL,
             nombre TEXT NOT NULL,
             descripcion TEXT,
-            precio REAL NOT NULL,
+            precio DECIMAL(10,2) NOT NULL,
             stock INTEGER DEFAULT 0,
             categoria TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
 
         // Tabla ventas
-        db.run(`CREATE TABLE IF NOT EXISTS ventas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        await client.query(`CREATE TABLE IF NOT EXISTS ventas (
+            id SERIAL PRIMARY KEY,
             numero_factura TEXT UNIQUE NOT NULL,
-            total REAL NOT NULL,
+            total DECIMAL(10,2) NOT NULL,
             metodo_pago TEXT NOT NULL,
-            vuelto REAL DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            vuelto DECIMAL(10,2) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
 
         // Tabla items_venta
-        db.run(`CREATE TABLE IF NOT EXISTS venta_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            venta_id INTEGER NOT NULL,
-            producto_id INTEGER NOT NULL,
+        await client.query(`CREATE TABLE IF NOT EXISTS venta_items (
+            id SERIAL PRIMARY KEY,
+            venta_id INTEGER NOT NULL REFERENCES ventas(id),
+            producto_id INTEGER NOT NULL REFERENCES productos(id),
             cantidad INTEGER NOT NULL,
-            precio_unitario REAL NOT NULL,
-            descuento_porcentaje REAL DEFAULT 0,
-            descuento_aplicado REAL DEFAULT 0,
-            subtotal REAL NOT NULL,
-            FOREIGN KEY (venta_id) REFERENCES ventas(id),
-            FOREIGN KEY (producto_id) REFERENCES productos(id)
+            precio_unitario DECIMAL(10,2) NOT NULL,
+            descuento_porcentaje DECIMAL(5,2) DEFAULT 0,
+            descuento_aplicado DECIMAL(10,2) DEFAULT 0,
+            subtotal DECIMAL(10,2) NOT NULL
         )`);
 
         // Tabla cierres_caja
-        db.run(`CREATE TABLE IF NOT EXISTS cierres_caja (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
-            dinero_inicial REAL NOT NULL,
-            total_ventas REAL NOT NULL,
-            total_esperado REAL NOT NULL,
-            diferencia REAL NOT NULL,
+        await client.query(`CREATE TABLE IF NOT EXISTS cierres_caja (
+            id SERIAL PRIMARY KEY,
+            fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            dinero_inicial DECIMAL(10,2) NOT NULL,
+            total_ventas DECIMAL(10,2) NOT NULL,
+            total_esperado DECIMAL(10,2) NOT NULL,
+            diferencia DECIMAL(10,2) NOT NULL,
             cantidad_ventas INTEGER NOT NULL
         )`);
 
         // Tabla proveedores (suppliers)
-        db.run(`CREATE TABLE IF NOT EXISTS proveedores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        await client.query(`CREATE TABLE IF NOT EXISTS proveedores (
+            id SERIAL PRIMARY KEY,
             nombre_proveedor TEXT NOT NULL,
             nombre_contacto TEXT,
             telefono TEXT,
@@ -222,77 +207,83 @@ function initDatabase() {
             condiciones_pago TEXT,
             estatus TEXT DEFAULT 'Activo',
             notas TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
 
         // Tabla promociones
-        db.run(`CREATE TABLE IF NOT EXISTS promociones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        await client.query(`CREATE TABLE IF NOT EXISTS promociones (
+            id SERIAL PRIMARY KEY,
             nombre TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
 
         // Tabla productos en promocion
-        db.run(`CREATE TABLE IF NOT EXISTS promocion_productos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            promocion_id INTEGER NOT NULL,
-            producto_id INTEGER NOT NULL,
-            descuento_porcentaje REAL NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (promocion_id) REFERENCES promociones(id) ON DELETE CASCADE,
-            FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+        await client.query(`CREATE TABLE IF NOT EXISTS promocion_productos (
+            id SERIAL PRIMARY KEY,
+            promocion_id INTEGER NOT NULL REFERENCES promociones(id) ON DELETE CASCADE,
+            producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+            descuento_porcentaje DECIMAL(5,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
 
         // Verificar si hay datos
-        const result = dbAll("SELECT COUNT(*) as count FROM productos");
-        if (result.length === 0 || result[0].count === 0) {
-            insertSampleData();
+        const result = await client.query("SELECT COUNT(*) as count FROM productos");
+        if (parseInt(result.rows[0].count) === 0) {
+            await insertSampleData();
         }
 
-        console.log('✅ Base de datos inicializada correctamente');
+        console.log('✅ Base de datos PostgreSQL inicializada correctamente');
     } catch (error) {
         console.error('❌ Error inicializando base de datos:', error);
+        throw error;
+    } finally {
+        client.release();
     }
 }
 
 // Insertar datos de ejemplo
-function insertSampleData() {
-    const productos = [
-        ['LAP-001', 'Laptop HP 15.6"', 'Laptop HP con pantalla 15.6 pulgadas', 899.99, 5, 'Tecnología'],
-        ['MON-001', 'Monitor Samsung 24"', 'Monitor Samsung 24 pulgadas Full HD', 249.99, 3, 'Tecnología'],
-        ['TEC-001', 'Teclado Mecánico RGB', 'Teclado mecánico con iluminación RGB', 89.99, 8, 'Periféricos'],
-        ['MOU-001', 'Mouse Inalámbrico', 'Mouse inalámbrico ergonómico', 39.99, 10, 'Periféricos'],
-        ['AUD-001', 'Audífonos Bluetooth', 'Audífonos inalámbricos con cancelación de ruido', 79.99, 5, 'Audio']
-    ];
+async function insertSampleData() {
+    const client = await pool.connect();
+    try {
+        const productos = [
+            ['LAP-001', 'Laptop HP 15.6"', 'Laptop HP con pantalla 15.6 pulgadas', 899.99, 5, 'Tecnología'],
+            ['MON-001', 'Monitor Samsung 24"', 'Monitor Samsung 24 pulgadas Full HD', 249.99, 3, 'Tecnología'],
+            ['TEC-001', 'Teclado Mecánico RGB', 'Teclado mecánico con iluminación RGB', 89.99, 8, 'Periféricos'],
+            ['MOU-001', 'Mouse Inalámbrico', 'Mouse inalámbrico ergonómico', 39.99, 10, 'Periféricos'],
+            ['AUD-001', 'Audífonos Bluetooth', 'Audífonos inalámbricos con cancelación de ruido', 79.99, 5, 'Audio'],
+            ['CAM-001', 'Cámara Web HD', 'Cámara web 1080p para streaming', 59.99, 18, 'Video'],
+            ['DIS-001', 'Disco Duro 1TB', 'Disco duro interno 1TB 7200RPM', 69.99, 12, 'Almacenamiento'],
+            ['MEM-001', 'Memoria RAM 8GB', 'Memoria RAM DDR4 8GB 2666MHz', 49.99, 8, 'Componentes']
+        ];
 
-    const insert = db.prepare(`
-        INSERT OR IGNORE INTO productos (codigo, nombre, descripcion, precio, stock, categoria)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    productos.forEach(producto => {
-        try {
-            insert.run(producto);
-        } catch (error) {
-            console.log('⚠️  Error insertando producto:', producto[0], error.message);
+        for (const producto of productos) {
+            try {
+                await client.query(`
+                    INSERT INTO productos (codigo, nombre, descripcion, precio, stock, categoria)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (codigo) DO NOTHING
+                `, producto);
+            } catch (error) {
+                console.log('⚠️  Error insertando producto:', producto[0], error.message);
+            }
         }
-    });
 
-    console.log('✅ Datos de ejemplo insertados en SQLite');
+        console.log('✅ Datos de ejemplo insertados en PostgreSQL');
+    } finally {
+        client.release();
+    }
 }
 
-// Función para hacer queries más fácil (sql.js)
-function dbAll(query, params = []) {
+// Función para hacer queries SELECT (PostgreSQL)
+async function dbAll(query, params = []) {
+    const client = await pool.connect();
     try {
-        const stmt = db.prepare(query);
-        const results = [];
-        while (stmt.step()) {
-            results.push(stmt.getAsObject());
-        }
-        stmt.free();
-        return results;
+        const result = await client.query(query, params);
+        return result.rows;
     } catch (error) {
         throw error;
+    } finally {
+        client.release();
     }
 }
 
@@ -553,20 +544,19 @@ app.post('/api/generate-pdf-report', authMiddleware, async (req, res) => {
     }
 });
 
-function dbRun(query, params = []) {
+// Función para hacer queries INSERT/UPDATE/DELETE (PostgreSQL)
+async function dbRun(query, params = []) {
+    const client = await pool.connect();
     try {
-        // Para sql.js, necesitamos reemplazar los placeholders ? con los valores
-        let finalQuery = query;
-        params.forEach((param, index) => {
-            // Escapar comillas simples en strings
-            const escapedParam = typeof param === 'string' ? param.replace(/'/g, "''") : param;
-            finalQuery = finalQuery.replace('?', typeof param === 'string' ? `'${escapedParam}'` : param);
-        });
-
-        db.run(finalQuery);
-        return { id: db.exec("SELECT last_insert_rowid() as id")[0].values[0][0], changes: 1 };
+        const result = await client.query(query, params);
+        return {
+            id: result.rows[0]?.id || null,
+            changes: result.rowCount
+        };
     } catch (error) {
         throw error;
+    } finally {
+        client.release();
     }
 }
 //auto categorias
@@ -1709,17 +1699,17 @@ app.get('/api/diagnostic', async (req, res) => {
         const salesCount = await dbAll("SELECT COUNT(*) as count FROM ventas");
 
         res.json({
-            database: 'SQLite',
-            file: 'pos_database.sqlite',
-            total_products: productCount[0].count,
-            total_sales: salesCount[0].count,
+            database: 'PostgreSQL',
+            connection: process.env.DATABASE_URL ? 'External (Railway)' : 'Local',
+            total_products: parseInt(productCount[0].count),
+            total_sales: parseInt(salesCount[0].count),
             status: 'OK',
             timestamp: new Date().toISOString()
         });
     } catch (error) {
         res.status(500).json({
             error: error.message,
-            database: 'SQLite',
+            database: 'PostgreSQL',
             status: 'ERROR'
         });
     }
@@ -1971,8 +1961,9 @@ app.post('/api/demo-pdf', async (req, res) => {
 });
 
 // Cerrar conexión al terminar
-process.on('SIGINT', () => {
-    saveDatabase(); // Guardar antes de cerrar
-    console.log('✅ Conexión a la base de datos cerrada');
+process.on('SIGINT', async () => {
+    console.log('🔄 Cerrando conexión a PostgreSQL...');
+    await pool.end();
+    console.log('✅ Conexión a PostgreSQL cerrada');
     process.exit(0);
 });
