@@ -2,10 +2,23 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const initSqlJs = require('sql.js');
 const express = require('express');
+const cors = require('cors');
 
 admin.initializeApp();
 
 const app = express();
+
+// Configuración de CORS para Firebase Hosting
+const corsOptions = {
+    origin: [
+        'https://punto-de-venta-web-f47e8.web.app',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000'
+    ],
+    credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Configuración de SQLite con sql.js
